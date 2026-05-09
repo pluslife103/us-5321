@@ -228,35 +228,51 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 18px 20px 20px;
+    padding: 16px 20px 20px;
   }
-  .compare-top {
+  .compare-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
+    gap: 8px;
+    margin-bottom: 12px;
   }
   .compare-title {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     font-weight: 700;
-    color: var(--text);
-    white-space: nowrap;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .compare-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
   }
   .compare-search-wrap {
     position: relative;
     flex: 1;
-    min-width: 180px;
-    max-width: 280px;
+    min-width: 200px;
+  }
+  .compare-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text2);
+    font-size: 0.9rem;
+    pointer-events: none;
   }
   .compare-search {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 0.85rem;
+    padding: 8px 12px 8px 34px;
+    border-radius: 8px;
+    font-size: 0.88rem;
   }
   .compare-search:focus { outline: none; border-color: var(--accent); }
   .compare-search::placeholder { color: var(--text2); }
@@ -266,88 +282,117 @@
     left: 0; right: 0;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    max-height: 200px;
+    border-radius: 10px;
+    max-height: 220px;
     overflow-y: auto;
     z-index: 50;
     display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   }
   .compare-dropdown.open { display: block; }
   .compare-option {
-    padding: 7px 12px;
+    padding: 8px 14px;
     cursor: pointer;
     font-size: 0.83rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
   .compare-option:hover { background: var(--surface); }
-  .compare-option .opt-ticker { font-weight: 700; color: var(--accent); min-width: 52px; }
-  .compare-option .opt-name { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .compare-option .opt-cap { color: var(--text2); font-size: 0.75rem; white-space: nowrap; }
+  .compare-option .opt-ticker { font-weight: 700; color: var(--accent); min-width: 56px; }
+  .compare-option .opt-name   { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .compare-option .opt-cap    { color: var(--text2); font-size: 0.75rem; white-space: nowrap; }
+
+  /* Controls row */
+  .compare-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
   .compare-chips {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     flex: 1;
+    min-height: 30px;
+    align-items: center;
   }
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 10px 4px 12px;
-    border-radius: 16px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    border: 1px solid;
+    gap: 6px;
+    padding: 4px 8px 4px 10px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
     cursor: default;
-    transition: opacity 0.15s;
+  }
+  .chip-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
   .chip-remove {
     cursor: pointer;
-    opacity: 0.6;
-    font-size: 0.9rem;
+    opacity: 0.55;
+    font-size: 1rem;
     line-height: 1;
+    margin-left: 2px;
   }
   .chip-remove:hover { opacity: 1; }
-  .compare-metric-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .period-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
   .metric-btn {
-    padding: 4px 12px;
-    border-radius: 12px;
+    padding: 5px 14px;
+    border-radius: 8px;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--text2);
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s;
     white-space: nowrap;
   }
-  .metric-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .compare-chart-wrap { position: relative; height: 240px; }
+  .metric-btn.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .compare-clear {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .compare-clear:hover { border-color: var(--red); color: var(--red); }
+
+  .compare-chart-wrap { position: relative; height: 280px; }
   .compare-empty {
-    height: 200px;
+    height: 220px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     color: var(--text2);
     font-size: 0.88rem;
-    gap: 8px;
+    gap: 10px;
   }
-  .compare-empty-icon { font-size: 2rem; opacity: 0.4; }
-  .compare-clear {
-    padding: 4px 12px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text2);
-    font-size: 0.78rem;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .compare-clear:hover { border-color: var(--red); color: var(--red); }
+  .compare-empty-icon { font-size: 2.2rem; opacity: 0.35; }
 
   /* ── Charts ── */
   .charts-section {
@@ -419,29 +464,44 @@
 
 <!-- ── Compare Section ── -->
 <div class="compare-section">
-  <div class="compare-top">
-    <span class="compare-title">市值成長比較</span>
-
-    <div class="compare-search-wrap">
-      <input class="compare-search" id="compareSearch" placeholder="輸入代碼或公司名稱…" autocomplete="off">
-      <div class="compare-dropdown" id="compareDropdown"></div>
-    </div>
-
-    <div class="compare-chips" id="compareChips">
-      <span id="compareHint" style="color:var(--text2);font-size:0.82rem;align-self:center">最多加入 8 支，資料隨每日更新累積</span>
-    </div>
-
-    <div class="compare-metric-btns">
-      <button class="metric-btn active" data-mode="abs"  onclick="setGrowthMode('abs',this)">實際市值</button>
-      <button class="metric-btn"        data-mode="norm" onclick="setGrowthMode('norm',this)">相對成長%</button>
-    </div>
-    <button class="compare-clear" onclick="clearCompare()">清空</button>
+  <!-- Header -->
+  <div class="compare-header">
+    <span class="compare-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      自由比較
+    </span>
   </div>
 
+  <!-- Search row -->
+  <div class="compare-search-row">
+    <div class="compare-search-wrap">
+      <span class="compare-search-icon">🔍</span>
+      <input class="compare-search" id="compareSearch" placeholder="搜尋代號或公司名稱…" autocomplete="off">
+      <div class="compare-dropdown" id="compareDropdown"></div>
+    </div>
+  </div>
+
+  <!-- Chips + controls -->
+  <div class="compare-controls">
+    <div class="compare-chips" id="compareChips">
+      <span id="compareHint" style="color:var(--text2);font-size:0.8rem">加入股票後顯示市值成長曲線</span>
+    </div>
+    <select class="period-select" id="periodSelect" onchange="onPeriodChange()">
+      <option value="7">7 天</option>
+      <option value="14">14 天</option>
+      <option value="30" selected>30 天</option>
+      <option value="60">60 天</option>
+    </select>
+    <button class="metric-btn active" data-mode="abs"  onclick="setGrowthMode('abs',this)">市值</button>
+    <button class="metric-btn"        data-mode="norm" onclick="setGrowthMode('norm',this)">漲跌幅%</button>
+    <button class="compare-clear" onclick="clearCompare()">🗑 清除</button>
+  </div>
+
+  <!-- Chart -->
   <div id="compareBody">
     <div class="compare-empty" id="compareEmpty">
       <div class="compare-empty-icon">📈</div>
-      搜尋並加入股票，即可比較市值成長曲線
+      搜尋並加入股票，比較市值成長曲線與超越時間點
     </div>
     <div class="compare-chart-wrap" id="compareChartWrap" style="display:none">
       <canvas id="compareChart"></canvas>
@@ -754,10 +814,11 @@ async function refresh() {
 }
 
 // ── Compare (Market Cap Growth) ────────────────────────────────────────────
-const CHIP_COLORS = ['#4f7ef8','#f59e0b','#8b5cf6','#10b981','#ef4444','#06b6d4','#f97316','#e879f9'];
-let compareList = [];      // [{ticker, company_name}]
+const CHIP_COLORS = ['#22c55e','#f97316','#4f7ef8','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#e879f9'];
+let compareList    = [];   // [{ticker, company_name}]
 let compareHistory = {};   // { ticker: [{date, market_cap}] }
-let growthMode = 'abs';    // 'abs' | 'norm'
+let growthMode     = 'abs';
+let comparePeriod  = 30;
 let compareChartInst = null;
 
 function setGrowthMode(mode, btn) {
@@ -767,11 +828,14 @@ function setGrowthMode(mode, btn) {
   renderCompareChart();
 }
 
-function clearCompare() {
-  compareList = [];
-  compareHistory = {};
-  renderChips();
+function onPeriodChange() {
+  comparePeriod = parseInt(document.getElementById('periodSelect').value);
   renderCompareChart();
+}
+
+function clearCompare() {
+  compareList = []; compareHistory = {};
+  renderChips(); renderCompareChart();
 }
 
 function addToCompare(row) {
@@ -787,24 +851,21 @@ function addToCompare(row) {
 function removeFromCompare(ticker) {
   compareList = compareList.filter(r => r.ticker !== ticker);
   delete compareHistory[ticker];
-  renderChips();
-  renderCompareChart();
+  renderChips(); renderCompareChart();
 }
 
 function renderChips() {
   const wrap = document.getElementById('compareChips');
   const hint = document.getElementById('compareHint');
   if (!compareList.length) {
-    wrap.innerHTML = '';
-    wrap.appendChild(hint);
-    hint.style.display = '';
-    return;
+    wrap.innerHTML = ''; wrap.appendChild(hint); hint.style.display = ''; return;
   }
   hint.style.display = 'none';
   wrap.innerHTML = compareList.map((r, i) => {
     const c = CHIP_COLORS[i % CHIP_COLORS.length];
-    return `<span class="chip" style="color:${c};border-color:${c};background:${c}22">
-      ${r.ticker}
+    return `<span class="chip" style="background:${c}28;color:${c}">
+      <span class="chip-dot" style="background:${c}"></span>
+      ${r.ticker} ${r.company_name}
       <span class="chip-remove" onclick="removeFromCompare('${r.ticker}')">×</span>
     </span>`;
   }).join('');
@@ -815,18 +876,26 @@ async function loadCompareHistory() {
   if (!compareList.length) { renderCompareChart(); return; }
   const tickers = compareList.map(r => r.ticker).join(',');
   try {
-    const res  = await fetch(`/api/history?tickers=${tickers}`);
-    const rows = await res.json();
-    // Group by ticker
+    const rows = await fetch(`/api/history?tickers=${tickers}`).then(r => r.json());
     compareHistory = {};
     rows.forEach(r => {
-      if (!compareHistory[r.ticker]) compareHistory[r.ticker] = [];
-      compareHistory[r.ticker].push({ date: r.date, market_cap: r.market_cap });
+      (compareHistory[r.ticker] = compareHistory[r.ticker] || []).push(
+        { date: r.date, market_cap: r.market_cap }
+      );
     });
     renderCompareChart();
-  } catch(e) {
-    toast('歷史資料載入失敗');
+  } catch(e) { toast('歷史資料載入失敗'); }
+}
+
+function buildDateAxis(days) {
+  const today = new Date();
+  const dates = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
   }
+  return dates;
 }
 
 function renderCompareChart() {
@@ -839,30 +908,17 @@ function renderCompareChart() {
     return;
   }
 
-  // Build fixed 60-day date axis (calendar days, gaps on weekends are fine)
-  const today = new Date();
-  const allDates = [];
-  for (let i = 59; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    allDates.push(d.toISOString().slice(0, 10));
-  }
-
-  if (!allDates.length) {
-    empty.style.display = 'flex'; wrap.style.display = 'none';
-    return;
-  }
+  const allDates = buildDateAxis(comparePeriod);
   empty.style.display = 'none'; wrap.style.display = 'block';
 
   const datasets = compareList.map((stock, i) => {
-    const hist = compareHistory[stock.ticker] || [];
+    const hist   = compareHistory[stock.ticker] || [];
     const byDate = Object.fromEntries(hist.map(r => [r.date, r.market_cap]));
     const color  = CHIP_COLORS[i % CHIP_COLORS.length];
 
     let values = allDates.map(d => byDate[d] != null ? byDate[d] / 1e9 : null);
 
     if (growthMode === 'norm') {
-      // Normalize: % change from first available date
       const first = values.find(v => v != null);
       values = values.map(v => v != null && first ? +((v / first - 1) * 100).toFixed(2) : null);
     } else {
@@ -870,23 +926,24 @@ function renderCompareChart() {
     }
 
     return {
-      label: stock.ticker,
+      label: `${stock.ticker} ${stock.company_name}`,
       data: values,
       borderColor: color,
-      backgroundColor: color + '22',
-      borderWidth: 2.5,
-      pointRadius: allDates.length <= 10 ? 4 : 2,
+      backgroundColor: color + '18',
+      borderWidth: 2,
+      pointRadius: comparePeriod <= 14 ? 4 : comparePeriod <= 30 ? 3 : 2,
       pointHoverRadius: 6,
-      tension: 0.3,
-      fill: false,
+      pointBackgroundColor: color,
+      tension: 0.35,
+      fill: true,
       spanGaps: true,
     };
   });
 
-  const yLabel = growthMode === 'norm' ? '相對成長 (%)' : '市值 (Billion USD)';
-  const fmtY   = growthMode === 'norm'
-    ? v => (v >= 0 ? '+' : '') + v + '%'
-    : v => '$' + v + 'B';
+  const isNorm = growthMode === 'norm';
+  const fmtY   = isNorm
+    ? v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
+    : v => '$' + (v >= 1000 ? (v/1000).toFixed(2)+'T' : v.toFixed(0)+'B');
 
   if (compareChartInst) compareChartInst.destroy();
   compareChartInst = new Chart(document.getElementById('compareChart'), {
@@ -896,28 +953,47 @@ function renderCompareChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      animation: { duration: 400 },
+      animation: { duration: 350 },
       plugins: {
         legend: {
           display: true,
           position: 'top',
-          labels: { color: '#e8eaf0', font: { size: 12, weight: '700' }, boxWidth: 16, padding: 16 },
+          align: 'center',
+          labels: {
+            color: '#e8eaf0',
+            font: { size: 12, weight: '600' },
+            boxWidth: 12, boxHeight: 12,
+            padding: 20,
+            usePointStyle: true,
+            pointStyle: 'circle',
+          },
         },
         tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor: '#2e3148',
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y != null ? fmtY(ctx.parsed.y) : '—'}`,
+            label: ctx => {
+              if (ctx.parsed.y == null) return null;
+              return `  ${ctx.dataset.label}: ${fmtY(ctx.parsed.y)}`;
+            },
           },
         },
       },
       scales: {
         x: {
-          ticks: { color: '#9aa0b8', maxTicksLimit: 10, maxRotation: 30, autoSkip: true },
-          grid:  { color: '#2e3148' },
+          ticks: {
+            color: '#9aa0b8',
+            maxTicksLimit: comparePeriod <= 14 ? comparePeriod : 10,
+            maxRotation: 0,
+            autoSkip: true,
+          },
+          grid: { color: '#2e314840' },
         },
         y: {
-          title: { display: true, text: yLabel, color: '#9aa0b8', font: { size: 11 } },
           ticks: { color: '#9aa0b8', callback: fmtY },
-          grid:  { color: '#2e3148' },
+          grid:  { color: '#2e314880' },
         },
       },
     },
