@@ -129,6 +129,48 @@ class Database:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    def get_crossovers(self, date_str):
+        """Detect mega-cap (>=200B) companies that surpassed each other on date_str."""
+        with self._conn() as conn:
+            prev_row = conn.execute(
+                "SELECT MAX(date) FROM market_cap_daily WHERE date < ?", (date_str,)
+            ).fetchone()
+            prev_date = prev_row[0] if prev_row else None
+        if not prev_date:
+            return []
+
+        def _get(d):
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT ticker, company_name, market_cap FROM market_cap_daily "
+                    "WHERE date = ? AND market_cap >= 200e9 ORDER BY market_cap DESC", (d,)
+                ).fetchall()
+            return {r[0]: {"company_name": r[1], "market_cap": r[2]} for r in rows}
+
+        today = _get(date_str)
+        prev  = _get(prev_date)
+        common = [t for t in today if t in prev]
+
+        results = []
+        for i in range(len(common)):
+            for j in range(i + 1, len(common)):
+                a, b = common[i], common[j]
+                at, bt = today[a]["market_cap"], today[b]["market_cap"]
+                ap, bp = prev[a]["market_cap"],  prev[b]["market_cap"]
+                winner = loser = None
+                if at > bt and ap <= bp: winner, loser = a, b
+                elif bt > at and bp <= ap: winner, loser = b, a
+                if winner:
+                    results.append({
+                        "winner": winner, "winner_name": today[winner]["company_name"],
+                        "winner_cap": today[winner]["market_cap"],
+                        "winner_prev_cap": prev[winner]["market_cap"],
+                        "loser": loser,  "loser_name":  today[loser]["company_name"],
+                        "loser_cap":  today[loser]["market_cap"],
+                        "loser_prev_cap": prev[loser]["market_cap"],
+                    })
+        return sorted(results, key=lambda x: x["winner_cap"], reverse=True)
+
     def get_ticker_history(self, tickers):
         placeholders = ",".join("?" * len(tickers))
         with self._conn() as conn:

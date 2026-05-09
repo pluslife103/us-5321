@@ -52,6 +52,17 @@ def api_stocks():
     return jsonify({"date": date_str, "summary": summary, "data": rows})
 
 
+@app.route("/api/crossovers")
+def api_crossovers():
+    date_str = request.args.get("date")
+    if not date_str:
+        dates = db.get_dates()
+        if not dates:
+            return jsonify([])
+        date_str = dates[0]
+    return jsonify(db.get_crossovers(date_str))
+
+
 @app.route("/api/history")
 def api_history():
     raw = request.args.get("tickers", "")

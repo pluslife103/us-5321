@@ -222,6 +222,62 @@
   .state-msg .icon { font-size: 2.5rem; margin-bottom: 12px; }
   .state-msg p { font-size: 0.95rem; }
 
+  /* ── Crossover Alerts ── */
+  .crossover-bar {
+    margin: 16px 24px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .crossover-bar-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .crossover-bar-header:hover { background: var(--surface2); }
+  .crossover-bar-icon { font-size: 1rem; }
+  .crossover-bar-title { font-size: 0.85rem; font-weight: 700; color: var(--text); flex: 1; }
+  .crossover-bar-date { font-size: 0.78rem; color: var(--text2); }
+  .crossover-bar-count {
+    font-size: 0.75rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px;
+    background: rgba(245,158,11,0.15); color: var(--mega);
+    border: 1px solid rgba(245,158,11,0.3);
+  }
+  .crossover-chevron { font-size: 0.75rem; color: var(--text2); transition: transform 0.2s; }
+  .crossover-chevron.open { transform: rotate(180deg); }
+  .crossover-list {
+    display: none;
+    padding: 0 12px 12px;
+    gap: 8px;
+    flex-direction: column;
+  }
+  .crossover-list.open { display: flex; }
+  .crossover-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--mega);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .crossover-arrow { font-size: 1.1rem; color: var(--mega); }
+  .crossover-stocks { flex: 1; }
+  .crossover-main { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+  .crossover-main .winner { color: var(--green); }
+  .crossover-main .loser  { color: var(--red); }
+  .crossover-caps { font-size: 0.78rem; color: var(--text2); margin-top: 3px; }
+  .crossover-caps .cap-up   { color: var(--green); font-weight: 600; }
+  .crossover-caps .cap-down { color: var(--red);   font-weight: 600; }
+  .crossover-empty { padding: 12px 16px; font-size: 0.83rem; color: var(--text2); }
+
   /* ── Compare Section ── */
   .compare-section {
     margin: 20px 24px 0;
@@ -461,6 +517,18 @@
     <button class="btn btn-primary" id="refreshBtn" onclick="refresh()">更新資料</button>
   </div>
 </header>
+
+<!-- ── Crossover Alerts ── -->
+<div class="crossover-bar" id="crossoverBar" style="display:none">
+  <div class="crossover-bar-header" onclick="toggleCrossovers()">
+    <span class="crossover-bar-icon">🔔</span>
+    <span class="crossover-bar-title">今日異動</span>
+    <span class="crossover-bar-date" id="crossoverDate"></span>
+    <span class="crossover-bar-count" id="crossoverCount"></span>
+    <span class="crossover-chevron" id="crossoverChevron">▼</span>
+  </div>
+  <div class="crossover-list open" id="crossoverList"></div>
+</div>
 
 <!-- ── Compare Section ── -->
 <div class="compare-section">
@@ -777,6 +845,7 @@ async function loadData(dateStr) {
 
     msg.style.display = 'none';
     applyFilters();
+    loadCrossovers(date);
   } catch (e) {
     msgTxt.textContent = `錯誤：${e.message}`;
   }
@@ -810,6 +879,50 @@ async function refresh() {
     toast('更新失敗：' + e.message);
     btn.disabled = false;
     btn.textContent = '更新資料';
+  }
+}
+
+// ── Crossover Alerts ─────────────────────────────────────────────────────
+let crossoverOpen = true;
+
+function toggleCrossovers() {
+  crossoverOpen = !crossoverOpen;
+  document.getElementById('crossoverList').classList.toggle('open', crossoverOpen);
+  document.getElementById('crossoverChevron').classList.toggle('open', crossoverOpen);
+}
+
+async function loadCrossovers(dateStr) {
+  const bar = document.getElementById('crossoverBar');
+  try {
+    const url = dateStr ? `/api/crossovers?date=${dateStr}` : '/api/crossovers';
+    const events = await fetch(url).then(r => r.json());
+
+    if (!events.length) { bar.style.display = 'none'; return; }
+
+    bar.style.display = 'block';
+    document.getElementById('crossoverDate').textContent = dateStr || '';
+    document.getElementById('crossoverCount').textContent = `${events.length} 筆超越事件`;
+
+    document.getElementById('crossoverList').innerHTML = events.map(e => `
+      <div class="crossover-card">
+        <span class="crossover-arrow">📈</span>
+        <div class="crossover-stocks">
+          <div class="crossover-main">
+            <span class="winner">${e.winner} ${e.winner_name}</span>
+            &nbsp;超越&nbsp;
+            <span class="loser">${e.loser} ${e.loser_name}</span>
+          </div>
+          <div class="crossover-caps">
+            今日&nbsp;
+            <span class="cap-up">${fmtCap(e.winner_cap)}</span>
+            &nbsp;>&nbsp;
+            <span class="cap-down">${fmtCap(e.loser_cap)}</span>
+            &emsp;昨日&nbsp;${fmtCap(e.winner_prev_cap)}&nbsp;<&nbsp;${fmtCap(e.loser_prev_cap)}
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(err) {
+    bar.style.display = 'none';
   }
 }
 
