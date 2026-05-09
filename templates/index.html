@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美股市值篩選器</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --border: #2e3148;
+    --text: #e8eaf0;
+    --text2: #9aa0b8;
+    --accent: #4f7ef8;
+    --accent2: #7c5cbf;
+    --green: #22c55e;
+    --red: #ef4444;
+    --mega: #f59e0b;
+    --large: #3b82f6;
+    --mid: #8b5cf6;
+    --small: #10b981;
+    --micro: #6b7280;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .header-left h1 span { color: var(--accent); }
+  .header-meta {
+    font-size: 0.78rem;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+  .header-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .date-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Summary cards ── */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 20px 24px 0;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .card-label { font-size: 0.75rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-value { font-size: 1.4rem; font-weight: 700; margin-top: 4px; }
+  .card-value.small-text { font-size: 1.1rem; }
+  .card-sub { font-size: 0.75rem; color: var(--text2); margin-top: 2px; }
+  .color-mega  { color: var(--mega); }
+  .color-large { color: var(--large); }
+  .color-mid   { color: var(--mid); }
+  .color-small { color: var(--small); }
+  .color-micro { color: var(--micro); }
+
+  /* ── Filters ── */
+  .filters {
+    display: flex;
+    gap: 10px;
+    padding: 16px 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .tier-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tier-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tier-btn:hover { color: var(--text); border-color: var(--accent); }
+  .tier-btn.active { color: #fff; border-color: transparent; }
+  .tier-btn[data-tier="all"].active    { background: var(--accent); }
+  .tier-btn[data-tier="mega"].active   { background: var(--mega); }
+  .tier-btn[data-tier="large"].active  { background: var(--large); }
+  .tier-btn[data-tier="mid"].active    { background: var(--mid); }
+  .tier-btn[data-tier="small"].active  { background: var(--small); }
+  .tier-btn[data-tier="micro"].active  { background: var(--micro); }
+
+  .filter-sep { width: 1px; height: 28px; background: var(--border); }
+  .sector-select, .search-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  .search-input { min-width: 200px; }
+  .search-input::placeholder { color: var(--text2); }
+  .search-input:focus, .sector-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .result-count { margin-left: auto; font-size: 0.82rem; color: var(--text2); white-space: nowrap; }
+
+  /* ── Table ── */
+  .table-wrap {
+    padding: 0 24px 32px;
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  thead { position: sticky; top: 61px; z-index: 10; }
+  th {
+    background: var(--surface);
+    color: var(--text2);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--text); }
+  th.sorted { color: var(--accent); }
+  th .sort-icon { margin-left: 4px; opacity: 0.5; }
+  th.sorted .sort-icon { opacity: 1; }
+  td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+
+  .col-rank { color: var(--text2); font-size: 0.8rem; width: 50px; }
+  .col-ticker { font-weight: 700; color: var(--accent); letter-spacing: 0.3px; }
+  .col-company { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .col-sector { color: var(--text2); font-size: 0.82rem; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  .col-mcap { font-weight: 600; text-align: right; }
+  .col-price { text-align: right; }
+  .col-chg { text-align: right; font-weight: 600; }
+  .up   { color: var(--green); }
+  .down { color: var(--red); }
+
+  /* ── Tier badge ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    border: 1px solid;
+  }
+  .badge-mega  { color: var(--mega);  border-color: var(--mega);  background: rgba(245,158,11,0.12); }
+  .badge-large { color: var(--large); border-color: var(--large); background: rgba(59,130,246,0.12); }
+  .badge-mid   { color: var(--mid);   border-color: var(--mid);   background: rgba(139,92,246,0.12); }
+  .badge-small { color: var(--small); border-color: var(--small); background: rgba(16,185,129,0.12); }
+  .badge-micro { color: var(--micro); border-color: var(--micro); background: rgba(107,114,128,0.12); }
+
+  /* ── State messages ── */
+  .state-msg {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text2);
+  }
+  .state-msg .icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .state-msg p { font-size: 0.95rem; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 0.88rem;
+    max-width: 340px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.25s;
+    z-index: 200;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>美股市值篩選器 <span>US Market Cap</span></h1>
+    <div class="header-meta" id="headerMeta">載入中…</div>
+  </div>
+  <div class="header-right">
+    <select class="date-select" id="dateSelect"></select>
+    <button class="btn btn-primary" id="refreshBtn" onclick="refresh()">更新資料</button>
+  </div>
+</header>
+
+<!-- Summary cards -->
+<div class="summary" id="summary">
+  <div class="card"><div class="card-label">總檔數</div><div class="card-value" id="s-total">—</div></div>
+  <div class="card"><div class="card-label">總市值</div><div class="card-value small-text" id="s-totalcap">—</div><div class="card-sub">USD</div></div>
+  <div class="card"><div class="card-label">Mega Cap ≥$200B</div><div class="card-value color-mega" id="s-mega">—</div></div>
+  <div class="card"><div class="card-label">Large Cap $10B–$200B</div><div class="card-value color-large" id="s-large">—</div></div>
+  <div class="card"><div class="card-label">Mid Cap $2B–$10B</div><div class="card-value color-mid" id="s-mid">—</div></div>
+  <div class="card"><div class="card-label">Small Cap $300M–$2B</div><div class="card-value color-small" id="s-small">—</div></div>
+  <div class="card"><div class="card-label">Micro Cap &lt;$300M</div><div class="card-value color-micro" id="s-micro">—</div></div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <div class="tier-group">
+    <button class="tier-btn active" data-tier="all"  onclick="setTier('all')">全部</button>
+    <button class="tier-btn" data-tier="mega"  onclick="setTier('mega')">Mega ≥$200B</button>
+    <button class="tier-btn" data-tier="large" onclick="setTier('large')">Large</button>
+    <button class="tier-btn" data-tier="mid"   onclick="setTier('mid')">Mid</button>
+    <button class="tier-btn" data-tier="small" onclick="setTier('small')">Small</button>
+    <button class="tier-btn" data-tier="micro" onclick="setTier('micro')">Micro &lt;$300M</button>
+  </div>
+  <div class="filter-sep"></div>
+  <select class="sector-select" id="sectorSelect" onchange="applyFilters()">
+    <option value="">所有產業</option>
+  </select>
+  <input class="search-input" id="searchInput" placeholder="搜尋代碼 / 公司名稱…" oninput="applyFilters()">
+  <span class="result-count" id="resultCount"></span>
+</div>
+
+<!-- Table -->
+<div class="table-wrap">
+  <table id="stockTable">
+    <thead>
+      <tr>
+        <th class="col-rank">#</th>
+        <th onclick="sortBy('ticker')">代碼 <span class="sort-icon">↕</span></th>
+        <th onclick="sortBy('company_name')">公司名稱 <span class="sort-icon">↕</span></th>
+        <th onclick="sortBy('sector')">產業 <span class="sort-icon">↕</span></th>
+        <th onclick="sortBy('market_cap')" class="col-mcap sorted">市值 (USD) <span class="sort-icon">↓</span></th>
+        <th>分類</th>
+        <th onclick="sortBy('price')" class="col-price">股價 <span class="sort-icon">↕</span></th>
+        <th onclick="sortBy('change_pct')" class="col-chg">漲跌% <span class="sort-icon">↕</span></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="state-msg" id="stateMsg" style="display:none">
+    <div class="icon">📊</div>
+    <p id="stateMsgText">載入資料中…</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allRows = [];
+let activeTier = 'all';
+let sortKey = 'market_cap';
+let sortDir = -1; // -1 = desc, 1 = asc
+const TIERS = {
+  mega:  r => r.market_cap >= 200e9,
+  large: r => r.market_cap >= 10e9  && r.market_cap < 200e9,
+  mid:   r => r.market_cap >= 2e9   && r.market_cap < 10e9,
+  small: r => r.market_cap >= 300e6 && r.market_cap < 2e9,
+  micro: r => r.market_cap > 0      && r.market_cap < 300e6,
+};
+function tierOf(cap) {
+  if (cap >= 200e9) return 'mega';
+  if (cap >= 10e9)  return 'large';
+  if (cap >= 2e9)   return 'mid';
+  if (cap >= 300e6) return 'small';
+  return 'micro';
+}
+
+// ── Number formatting ──────────────────────────────────────────────────────
+function fmtCap(v) {
+  if (!v || v <= 0) return '—';
+  if (v >= 1e12)  return '$' + (v / 1e12).toFixed(2) + 'T';
+  if (v >= 1e9)   return '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6)   return '$' + (v / 1e6).toFixed(0) + 'M';
+  return '$' + v.toFixed(0);
+}
+function fmtPrice(v) {
+  if (!v || v <= 0) return '—';
+  return '$' + v.toFixed(2);
+}
+function fmtPct(v) {
+  if (v === null || v === undefined) return '—';
+  const sign = v > 0 ? '+' : '';
+  return sign + v.toFixed(2) + '%';
+}
+
+// ── Badge ──────────────────────────────────────────────────────────────────
+const TIER_LABELS = { mega: 'Mega', large: 'Large', mid: 'Mid', small: 'Small', micro: 'Micro' };
+function badge(cap) {
+  const t = tierOf(cap);
+  return `<span class="badge badge-${t}">${TIER_LABELS[t]}</span>`;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sector = document.getElementById('sectorSelect').value;
+
+  let rows = allRows;
+  if (activeTier !== 'all') rows = rows.filter(TIERS[activeTier]);
+  if (sector) rows = rows.filter(r => r.sector === sector);
+  if (search) rows = rows.filter(r =>
+    r.ticker.toLowerCase().includes(search) ||
+    r.company_name.toLowerCase().includes(search)
+  );
+
+  // Sort
+  rows = [...rows].sort((a, b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return -sortDir;
+    if (va > vb) return sortDir;
+    return 0;
+  });
+
+  document.getElementById('resultCount').textContent = `顯示 ${rows.length} 檔`;
+  renderRows(rows);
+}
+
+function renderRows(rows) {
+  const tbody = document.getElementById('tbody');
+  const msg = document.getElementById('stateMsg');
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    msg.style.display = 'block';
+    document.getElementById('stateMsgText').textContent = '沒有符合條件的股票';
+    return;
+  }
+  msg.style.display = 'none';
+
+  // Recompute rank in filtered list
+  tbody.innerHTML = rows.map((r, i) => {
+    const chgClass = r.change_pct > 0 ? 'up' : r.change_pct < 0 ? 'down' : '';
+    return `<tr>
+      <td class="col-rank">${i + 1}</td>
+      <td class="col-ticker">${r.ticker}</td>
+      <td class="col-company" title="${r.company_name}">${r.company_name}</td>
+      <td class="col-sector"  title="${r.sector}">${r.sector || '—'}</td>
+      <td class="col-mcap">${fmtCap(r.market_cap)}</td>
+      <td>${badge(r.market_cap)}</td>
+      <td class="col-price">${fmtPrice(r.price)}</td>
+      <td class="col-chg ${chgClass}">${fmtPct(r.change_pct)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Sort ───────────────────────────────────────────────────────────────────
+function sortBy(key) {
+  if (sortKey === key) {
+    sortDir *= -1;
+  } else {
+    sortKey = key;
+    sortDir = key === 'market_cap' || key === 'price' || key === 'change_pct' ? -1 : 1;
+  }
+  // Update header UI
+  document.querySelectorAll('th').forEach(th => {
+    th.classList.remove('sorted');
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.textContent = '↕';
+  });
+  const activeTh = [...document.querySelectorAll('th')].find(
+    th => th.getAttribute('onclick') === `sortBy('${key}')`
+  );
+  if (activeTh) {
+    activeTh.classList.add('sorted');
+    const icon = activeTh.querySelector('.sort-icon');
+    if (icon) icon.textContent = sortDir === -1 ? '↓' : '↑';
+  }
+  applyFilters();
+}
+
+// ── Tier filter ────────────────────────────────────────────────────────────
+function setTier(tier) {
+  activeTier = tier;
+  document.querySelectorAll('.tier-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tier === tier);
+  });
+  applyFilters();
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ── Load data ──────────────────────────────────────────────────────────────
+async function loadData(dateStr) {
+  const msg = document.getElementById('stateMsg');
+  const msgTxt = document.getElementById('stateMsgText');
+  msg.style.display = 'block';
+  msgTxt.textContent = '資料載入中…';
+  document.getElementById('tbody').innerHTML = '';
+
+  try {
+    const url = dateStr ? `/api/stocks?date=${dateStr}` : '/api/stocks';
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json();
+      msgTxt.textContent = err.error || '載入失敗';
+      return;
+    }
+    const { date, summary, data } = await res.json();
+    allRows = data;
+
+    // Header meta
+    document.getElementById('headerMeta').textContent =
+      `資料日期：${date}　共 ${summary.total} 檔　S&P 500`;
+
+    // Summary cards
+    document.getElementById('s-total').textContent = summary.total;
+    document.getElementById('s-totalcap').textContent = fmtCap(summary.total_cap);
+    document.getElementById('s-mega').textContent  = summary.mega;
+    document.getElementById('s-large').textContent = summary.large;
+    document.getElementById('s-mid').textContent   = summary.mid;
+    document.getElementById('s-small').textContent = summary.small;
+    document.getElementById('s-micro').textContent = summary.micro;
+
+    // Sectors
+    const sectorSel = document.getElementById('sectorSelect');
+    const currentSector = sectorSel.value;
+    const sectors = [...new Set(data.map(r => r.sector).filter(Boolean))].sort();
+    sectorSel.innerHTML = '<option value="">所有產業</option>' +
+      sectors.map(s => `<option value="${s}"${s === currentSector ? ' selected' : ''}>${s}</option>`).join('');
+
+    msg.style.display = 'none';
+    applyFilters();
+  } catch (e) {
+    msgTxt.textContent = `錯誤：${e.message}`;
+  }
+}
+
+async function loadDates() {
+  const res = await fetch('/api/dates');
+  const dates = await res.json();
+  const sel = document.getElementById('dateSelect');
+  sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
+  sel.onchange = () => loadData(sel.value);
+}
+
+// ── Refresh ────────────────────────────────────────────────────────────────
+async function refresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '更新中…';
+  try {
+    const res = await fetch('/api/refresh', { method: 'POST' });
+    const data = await res.json();
+    toast(data.message, 5000);
+    // Poll for new data after 90s
+    setTimeout(async () => {
+      await loadDates();
+      await loadData(document.getElementById('dateSelect').value);
+      btn.disabled = false;
+      btn.textContent = '更新資料';
+    }, 90000);
+  } catch (e) {
+    toast('更新失敗：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '更新資料';
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+(async () => {
+  await loadDates();
+  await loadData(document.getElementById('dateSelect').value);
+})();
+</script>
+</body>
+</html>
