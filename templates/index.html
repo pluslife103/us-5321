@@ -284,6 +284,8 @@
   .crossover-caps { font-size: 0.78rem; color: var(--text2); margin-top: 3px; }
   .crossover-caps .cap-up   { color: var(--green); font-weight: 600; }
   .crossover-caps .cap-down { color: var(--red);   font-weight: 600; }
+  .crossover-losers { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+  .loser-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
   .crossover-empty { padding: 12px 16px; font-size: 0.83rem; color: var(--text2); }
 
   /* ── Compare Section ── */
@@ -910,34 +912,47 @@ async function loadCrossovers(dateStr) {
     bar.style.display = 'block';
     document.getElementById('crossoverDate').textContent = dateStr || '';
 
-    const megaCount  = events.filter(e => e.tier === 'mega').length;
-    const largeCount = events.filter(e => e.tier === 'large').length;
+    // Group by winner
+    const grouped = {};
+    events.forEach(e => {
+      const key = e.winner;
+      if (!grouped[key]) grouped[key] = { ...e, losers: [] };
+      grouped[key].losers.push(e);
+    });
+    const cards = Object.values(grouped).sort((a, b) => b.winner_cap - a.winner_cap);
+
+    const megaCount  = cards.filter(c => c.tier === 'mega').length;
+    const largeCount = cards.filter(c => c.tier === 'large').length;
     const parts = [];
     if (megaCount)  parts.push(`Mega ≥$200B ${megaCount} 筆`);
     if (largeCount) parts.push(`$100B–$200B ${largeCount} 筆`);
     document.getElementById('crossoverCount').textContent = parts.join('　');
 
-    document.getElementById('crossoverList').innerHTML = events.map(e => {
-      const isMega = e.tier === 'mega';
+    document.getElementById('crossoverList').innerHTML = cards.map(c => {
+      const isMega     = c.tier === 'mega';
       const badgeClass = isMega ? 'tier-badge-mega' : 'tier-badge-large';
       const badgeText  = isMega ? 'Mega ≥$200B' : '$100B–$200B';
       const arrowColor = isMega ? 'var(--mega)' : 'var(--large)';
+
+      const losersHtml = c.losers.map(e =>
+        `<span class="loser-item">
+          <span class="loser">${e.loser} ${e.loser_name}</span>
+          <span class="crossover-caps">
+            今日 <span class="cap-up">${fmtCap(e.winner_cap)}</span> > <span class="cap-down">${fmtCap(e.loser_cap)}</span>
+            &emsp;昨日 ${fmtCap(e.winner_prev_cap)} < ${fmtCap(e.loser_prev_cap)}
+          </span>
+        </span>`
+      ).join('');
+
       return `
-      <div class="crossover-card tier-${e.tier}">
+      <div class="crossover-card tier-${c.tier}">
         <span class="crossover-arrow" style="color:${arrowColor}">📈</span>
         <div class="crossover-stocks">
           <div class="crossover-main">
-            <span class="winner">${e.winner} ${e.winner_name}</span>
+            <span class="winner">${c.winner} ${c.winner_name}</span>
             &nbsp;超越&nbsp;
-            <span class="loser">${e.loser} ${e.loser_name}</span>
           </div>
-          <div class="crossover-caps">
-            今日&nbsp;
-            <span class="cap-up">${fmtCap(e.winner_cap)}</span>
-            &nbsp;>&nbsp;
-            <span class="cap-down">${fmtCap(e.loser_cap)}</span>
-            &emsp;昨日&nbsp;${fmtCap(e.winner_prev_cap)}&nbsp;<&nbsp;${fmtCap(e.loser_prev_cap)}
-          </div>
+          <div class="crossover-losers">${losersHtml}</div>
         </div>
         <span class="crossover-tier-badge ${badgeClass}">${badgeText}</span>
       </div>`;
