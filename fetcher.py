@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 MAX_WORKERS = 20
 BATCH_SIZE  = 200
+EXCLUDE_TICKERS = {"GOOG", "GOOGL", "BRK-B"}
 
 
 # ── Stock list ────────────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ def get_sp500_list():
             ticker  = str(row.get("Symbol", "")).strip().replace(".", "-")
             company = str(row.get("Security", row.get("Company", ""))).strip()
             sector  = str(row.get("GICS Sector", "")).strip()
-            if ticker:
+            if ticker and ticker not in EXCLUDE_TICKERS:
                 result.append({"ticker": ticker, "company_name": company, "sector": sector})
         logger.info(f"S&P 500 list: {len(result)} tickers")
         return result
