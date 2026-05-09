@@ -222,6 +222,44 @@
   .state-msg .icon { font-size: 2.5rem; margin-bottom: 12px; }
   .state-msg p { font-size: 0.95rem; }
 
+  /* ── Crossover Stats Bar ── */
+  .crossover-stats {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 7px 24px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+    position: sticky;
+    top: 61px;
+    z-index: 90;
+  }
+  .crossover-stats.visible { display: flex; }
+  .stats-label { font-size: 0.78rem; color: var(--text2); font-weight: 600; flex-shrink: 0; }
+  .stats-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border: 1px solid;
+    flex-shrink: 0;
+    cursor: default;
+  }
+  .stats-pill.tier-mega  { color: var(--mega);  border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.1); }
+  .stats-pill.tier-large { color: var(--large); border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.1); }
+  .stats-pill-count {
+    background: rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 0 5px;
+    font-size: 0.72rem;
+  }
+  .stats-sep { color: var(--border); flex-shrink: 0; }
+
   /* ── Crossover Alerts ── */
   .crossover-bar {
     margin: 16px 24px 0;
@@ -527,6 +565,12 @@
     <button class="btn btn-primary" id="refreshBtn" onclick="refresh()">更新資料</button>
   </div>
 </header>
+
+<!-- ── Crossover Stats Bar ── -->
+<div class="crossover-stats" id="crossoverStats">
+  <span class="stats-label">今日異動</span>
+  <div id="statsPills"></div>
+</div>
 
 <!-- ── Crossover Alerts ── -->
 <div class="crossover-bar" id="crossoverBar" style="display:none">
@@ -902,12 +946,37 @@ function toggleCrossovers() {
 }
 
 async function loadCrossovers(dateStr) {
-  const bar = document.getElementById('crossoverBar');
+  const bar   = document.getElementById('crossoverBar');
+  const stats = document.getElementById('crossoverStats');
   try {
     const url = dateStr ? `/api/crossovers?date=${dateStr}` : '/api/crossovers';
     const events = await fetch(url).then(r => r.json());
 
-    if (!events.length) { bar.style.display = 'none'; return; }
+    if (!events.length) {
+      bar.style.display = 'none';
+      stats.classList.remove('visible');
+      return;
+    }
+
+    // ── Stats bar ──────────────────────────────────────────────────────────
+    // Count how many companies each winner surpassed
+    const winnerCount = {};
+    const winnerTier  = {};
+    events.forEach(e => {
+      winnerCount[e.winner] = (winnerCount[e.winner] || 0) + 1;
+      // prefer mega tier label if any event is mega
+      if (!winnerTier[e.winner] || e.tier === 'mega') winnerTier[e.winner] = e.tier;
+    });
+    const sorted = Object.entries(winnerCount).sort((a, b) => b[1] - a[1]);
+
+    document.getElementById('statsPills').innerHTML = sorted.map(([ticker, cnt], i) => {
+      const tier = winnerTier[ticker];
+      return `${i > 0 ? '<span class="stats-sep">·</span>' : ''}
+        <span class="stats-pill tier-${tier}">
+          ${ticker} 超越 <span class="stats-pill-count">${cnt}</span> 次
+        </span>`;
+    }).join('');
+    stats.classList.add('visible');
 
     bar.style.display = 'block';
     document.getElementById('crossoverDate').textContent = dateStr || '';
@@ -959,6 +1028,7 @@ async function loadCrossovers(dateStr) {
     }).join('');
   } catch(err) {
     bar.style.display = 'none';
+    document.getElementById('crossoverStats').classList.remove('visible');
   }
 }
 
