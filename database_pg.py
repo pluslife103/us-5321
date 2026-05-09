@@ -161,6 +161,12 @@ class Database:
 
     # ── Writes ────────────────────────────────────────────────────────────────
 
+    def clear_all(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM ticker_info")
+                cur.execute("DELETE FROM market_cap_daily")
+
     def insert_batch(self, records):
         """records: list of (date, ticker, company_name, sector, price, market_cap, shares, change_pct)"""
         with self._conn() as conn:

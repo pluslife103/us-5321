@@ -13,6 +13,9 @@ import fetcher
 db = Database()
 db.init_db()
 
-# Always fetch 65 days so missing historical dates backfill automatically
+if os.environ.get("FORCE_REFETCH", "").lower() == "true":
+    logging.info("FORCE_REFETCH=true — clearing all cached data")
+    db.clear_all()
+
 count = fetcher.fetch_and_store(db, period="65d")
 logging.info(f"Done — {count} new records written")

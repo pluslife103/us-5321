@@ -40,11 +40,18 @@ def _fetch_one_shares(item):
     ticker = item["ticker"]
     try:
         info = yf.Ticker(ticker).info
+        market_cap    = float(info.get("marketCap")      or 0)
+        current_price = float(info.get("currentPrice")   or info.get("regularMarketPrice") or 0)
+        # Use marketCap/price as effective shares — correctly handles multi-class shares (GOOG, BRK, etc.)
+        if market_cap > 0 and current_price > 0:
+            effective_shares = market_cap / current_price
+        else:
+            effective_shares = float(info.get("sharesOutstanding") or 0)
         return {
             "ticker":       ticker,
             "company_name": info.get("longName") or info.get("shortName") or item["company_name"],
             "sector":       info.get("sector") or item.get("sector") or "",
-            "shares":       float(info.get("sharesOutstanding") or 0),
+            "shares":       effective_shares,
             "ok":           True,
         }
     except Exception as e:

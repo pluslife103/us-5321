@@ -2,9 +2,15 @@ name: Daily US Market Cap Update
 
 on:
   schedule:
-    # 美股收盤後（美東時間 4PM = UTC 22:00），週一到週五
     - cron: '0 22 * * 1-5'
-  workflow_dispatch:   # 允許手動觸發
+  workflow_dispatch:
+    inputs:
+      force_refetch:
+        description: '清空並重新抓取所有歷史資料（修正錯誤資料用）'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 jobs:
   update:
@@ -19,7 +25,8 @@ jobs:
       - name: Install dependencies
         run: pip install yfinance pandas requests psycopg2-binary lxml html5lib
 
-      - name: Fetch today's market cap data
+      - name: Fetch market cap data
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          FORCE_REFETCH: ${{ github.event.inputs.force_refetch || 'false' }}
         run: python daily_fetch.py
