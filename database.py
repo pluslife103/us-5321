@@ -91,6 +91,16 @@ class Database:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    def get_ticker_history(self, tickers):
+        placeholders = ",".join("?" * len(tickers))
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"SELECT date, ticker, company_name, market_cap FROM market_cap_daily "
+                f"WHERE ticker IN ({placeholders}) AND market_cap > 0 ORDER BY date ASC",
+                tickers,
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     # ── Writes ────────────────────────────────────────────────────────────────
 
     def insert_batch(self, records):

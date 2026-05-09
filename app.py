@@ -52,6 +52,15 @@ def api_stocks():
     return jsonify({"date": date_str, "summary": summary, "data": rows})
 
 
+@app.route("/api/history")
+def api_history():
+    raw = request.args.get("tickers", "")
+    tickers = [t.strip().upper() for t in raw.split(",") if t.strip()]
+    if not tickers:
+        return jsonify([])
+    return jsonify(db.get_ticker_history(tickers))
+
+
 @app.route("/api/refresh", methods=["POST"])
 def api_refresh():
     if os.environ.get("DATABASE_URL"):

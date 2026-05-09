@@ -107,6 +107,16 @@ class Database:
                 )
                 return [dict(r) for r in cur.fetchall()]
 
+    def get_ticker_history(self, tickers):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT date, ticker, company_name, market_cap FROM market_cap_daily "
+                    "WHERE ticker = ANY(%s) AND market_cap > 0 ORDER BY date ASC",
+                    (list(tickers),),
+                )
+                return [dict(r) for r in cur.fetchall()]
+
     # ── Writes ────────────────────────────────────────────────────────────────
 
     def insert_batch(self, records):

@@ -420,33 +420,28 @@
 <!-- ── Compare Section ── -->
 <div class="compare-section">
   <div class="compare-top">
-    <span class="compare-title">自由比較</span>
+    <span class="compare-title">市值成長比較</span>
 
-    <!-- Search & autocomplete -->
     <div class="compare-search-wrap">
       <input class="compare-search" id="compareSearch" placeholder="輸入代碼或公司名稱…" autocomplete="off">
       <div class="compare-dropdown" id="compareDropdown"></div>
     </div>
 
-    <!-- Selected chips -->
     <div class="compare-chips" id="compareChips">
-      <span id="compareHint" style="color:var(--text2);font-size:0.82rem;align-self:center">最多可加入 8 支股票</span>
+      <span id="compareHint" style="color:var(--text2);font-size:0.82rem;align-self:center">最多加入 8 支，資料隨每日更新累積</span>
     </div>
 
-    <!-- Metric selector -->
     <div class="compare-metric-btns">
-      <button class="metric-btn active" data-metric="market_cap"  onclick="setMetric('market_cap',this)">市值</button>
-      <button class="metric-btn"        data-metric="price"       onclick="setMetric('price',this)">股價</button>
-      <button class="metric-btn"        data-metric="change_pct"  onclick="setMetric('change_pct',this)">漲跌%</button>
+      <button class="metric-btn active" data-mode="abs"  onclick="setGrowthMode('abs',this)">實際市值</button>
+      <button class="metric-btn"        data-mode="norm" onclick="setGrowthMode('norm',this)">相對成長%</button>
     </div>
     <button class="compare-clear" onclick="clearCompare()">清空</button>
   </div>
 
-  <!-- Chart or empty state -->
   <div id="compareBody">
     <div class="compare-empty" id="compareEmpty">
       <div class="compare-empty-icon">📈</div>
-      搜尋並加入股票，開始比較
+      搜尋並加入股票，即可比較市值成長曲線
     </div>
     <div class="compare-chart-wrap" id="compareChartWrap" style="display:none">
       <canvas id="compareChart"></canvas>
@@ -758,14 +753,15 @@ async function refresh() {
   }
 }
 
-// ── Compare ───────────────────────────────────────────────────────────────
+// ── Compare (Market Cap Growth) ────────────────────────────────────────────
 const CHIP_COLORS = ['#4f7ef8','#f59e0b','#8b5cf6','#10b981','#ef4444','#06b6d4','#f97316','#e879f9'];
-let compareList = [];   // [{ticker, company_name, market_cap, price, change_pct}]
-let compareMetric = 'market_cap';
+let compareList = [];      // [{ticker, company_name}]
+let compareHistory = {};   // { ticker: [{date, market_cap}] }
+let growthMode = 'abs';    // 'abs' | 'norm'
 let compareChartInst = null;
 
-function setMetric(m, btn) {
-  compareMetric = m;
+function setGrowthMode(mode, btn) {
+  growthMode = mode;
   document.querySelectorAll('.metric-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderCompareChart();
@@ -773,6 +769,7 @@ function setMetric(m, btn) {
 
 function clearCompare() {
   compareList = [];
+  compareHistory = {};
   renderChips();
   renderCompareChart();
 }
@@ -780,15 +777,16 @@ function clearCompare() {
 function addToCompare(row) {
   if (compareList.find(r => r.ticker === row.ticker)) return;
   if (compareList.length >= 8) { toast('最多比較 8 支股票'); return; }
-  compareList.push(row);
+  compareList.push({ ticker: row.ticker, company_name: row.company_name });
   renderChips();
-  renderCompareChart();
   document.getElementById('compareSearch').value = '';
   document.getElementById('compareDropdown').classList.remove('open');
+  loadCompareHistory();
 }
 
 function removeFromCompare(ticker) {
   compareList = compareList.filter(r => r.ticker !== ticker);
+  delete compareHistory[ticker];
   renderChips();
   renderCompareChart();
 }
@@ -813,76 +811,108 @@ function renderChips() {
   wrap.appendChild(hint);
 }
 
+async function loadCompareHistory() {
+  if (!compareList.length) { renderCompareChart(); return; }
+  const tickers = compareList.map(r => r.ticker).join(',');
+  try {
+    const res  = await fetch(`/api/history?tickers=${tickers}`);
+    const rows = await res.json();
+    // Group by ticker
+    compareHistory = {};
+    rows.forEach(r => {
+      if (!compareHistory[r.ticker]) compareHistory[r.ticker] = [];
+      compareHistory[r.ticker].push({ date: r.date, market_cap: r.market_cap });
+    });
+    renderCompareChart();
+  } catch(e) {
+    toast('歷史資料載入失敗');
+  }
+}
+
 function renderCompareChart() {
   const empty = document.getElementById('compareEmpty');
   const wrap  = document.getElementById('compareChartWrap');
 
   if (!compareList.length) {
-    empty.style.display = 'flex';
-    wrap.style.display  = 'none';
+    empty.style.display = 'flex'; wrap.style.display = 'none';
     if (compareChartInst) { compareChartInst.destroy(); compareChartInst = null; }
     return;
   }
-  empty.style.display = 'none';
-  wrap.style.display  = 'block';
 
-  const labels = compareList.map(r => r.ticker);
-  const raw    = compareList.map(r => r[compareMetric] ?? 0);
-  const colors = compareList.map((_, i) => CHIP_COLORS[i % CHIP_COLORS.length]);
+  // Collect all dates
+  const allDates = [...new Set(
+    Object.values(compareHistory).flat().map(r => r.date)
+  )].sort();
 
-  let data, xLabel, fmt;
-  if (compareMetric === 'market_cap') {
-    data   = raw.map(v => +(v / 1e9).toFixed(2));
-    xLabel = 'USD Billion';
-    fmt    = v => '$' + v + 'B';
-  } else if (compareMetric === 'price') {
-    data   = raw.map(v => +v.toFixed(2));
-    xLabel = 'USD';
-    fmt    = v => '$' + v;
-  } else {
-    data   = raw.map(v => +v.toFixed(2));
-    xLabel = '%';
-    fmt    = v => (v >= 0 ? '+' : '') + v + '%';
+  if (!allDates.length) {
+    empty.style.display = 'flex'; wrap.style.display = 'none';
+    return;
   }
+  empty.style.display = 'none'; wrap.style.display = 'block';
+
+  const datasets = compareList.map((stock, i) => {
+    const hist = compareHistory[stock.ticker] || [];
+    const byDate = Object.fromEntries(hist.map(r => [r.date, r.market_cap]));
+    const color  = CHIP_COLORS[i % CHIP_COLORS.length];
+
+    let values = allDates.map(d => byDate[d] != null ? byDate[d] / 1e9 : null);
+
+    if (growthMode === 'norm') {
+      // Normalize: % change from first available date
+      const first = values.find(v => v != null);
+      values = values.map(v => v != null && first ? +((v / first - 1) * 100).toFixed(2) : null);
+    } else {
+      values = values.map(v => v != null ? +v.toFixed(2) : null);
+    }
+
+    return {
+      label: stock.ticker,
+      data: values,
+      borderColor: color,
+      backgroundColor: color + '22',
+      borderWidth: 2.5,
+      pointRadius: allDates.length <= 10 ? 4 : 2,
+      pointHoverRadius: 6,
+      tension: 0.3,
+      fill: false,
+      spanGaps: true,
+    };
+  });
+
+  const yLabel = growthMode === 'norm' ? '相對成長 (%)' : '市值 (Billion USD)';
+  const fmtY   = growthMode === 'norm'
+    ? v => (v >= 0 ? '+' : '') + v + '%'
+    : v => '$' + v + 'B';
 
   if (compareChartInst) compareChartInst.destroy();
   compareChartInst = new Chart(document.getElementById('compareChart'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: colors.map(c => c + 'cc'),
-        borderColor: colors,
-        borderWidth: 2,
-        borderRadius: 6,
-        borderSkipped: false,
-      }],
-    },
+    type: 'line',
+    data: { labels: allDates, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 350 },
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 400 },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: 'top',
+          labels: { color: '#e8eaf0', font: { size: 12, weight: '700' }, boxWidth: 16, padding: 16 },
+        },
         tooltip: {
           callbacks: {
-            label: ctx => ' ' + fmt(ctx.parsed.y),
-            title: ctx => {
-              const r = compareList[ctx[0].dataIndex];
-              return `${r.ticker} — ${r.company_name}`;
-            },
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y != null ? fmtY(ctx.parsed.y) : '—'}`,
           },
         },
       },
       scales: {
         x: {
-          ticks: { color: '#e8eaf0', font: { weight: '700', size: 12 } },
-          grid:  { display: false },
+          ticks: { color: '#9aa0b8', maxTicksLimit: 12, maxRotation: 0 },
+          grid:  { color: '#2e3148' },
         },
         y: {
-          title: { display: true, text: xLabel, color: '#9aa0b8', font: { size: 11 } },
-          ticks: { color: '#9aa0b8', callback: v => fmt(v) },
+          title: { display: true, text: yLabel, color: '#9aa0b8', font: { size: 11 } },
+          ticks: { color: '#9aa0b8', callback: fmtY },
           grid:  { color: '#2e3148' },
         },
       },
@@ -890,7 +920,7 @@ function renderCompareChart() {
   });
 }
 
-// Search autocomplete
+// ── Search autocomplete ────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const inp  = document.getElementById('compareSearch');
   const drop = document.getElementById('compareDropdown');
@@ -903,7 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .slice(0, 8);
     if (!hits.length) { drop.classList.remove('open'); return; }
     drop.innerHTML = hits.map(r => `
-      <div class="compare-option" onclick='addToCompare(${JSON.stringify(r)})'>
+      <div class="compare-option" onclick='addToCompare(${JSON.stringify({ticker:r.ticker,company_name:r.company_name})})'>
         <span class="opt-ticker">${r.ticker}</span>
         <span class="opt-name">${r.company_name}</span>
         <span class="opt-cap">${fmtCap(r.market_cap)}</span>
@@ -914,10 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', e => {
     if (!e.target.closest('.compare-search-wrap')) drop.classList.remove('open');
   });
-
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Escape') drop.classList.remove('open');
-  });
+  inp.addEventListener('keydown', e => { if (e.key === 'Escape') drop.classList.remove('open'); });
 });
 
 // ── Charts ────────────────────────────────────────────────────────────────
