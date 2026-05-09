@@ -222,6 +222,133 @@
   .state-msg .icon { font-size: 2.5rem; margin-bottom: 12px; }
   .state-msg p { font-size: 0.95rem; }
 
+  /* ── Compare Section ── */
+  .compare-section {
+    margin: 20px 24px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px 20px;
+  }
+  .compare-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .compare-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .compare-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+    max-width: 280px;
+  }
+  .compare-search {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  .compare-search:focus { outline: none; border-color: var(--accent); }
+  .compare-search::placeholder { color: var(--text2); }
+  .compare-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 50;
+    display: none;
+  }
+  .compare-dropdown.open { display: block; }
+  .compare-option {
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 0.83rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .compare-option:hover { background: var(--surface); }
+  .compare-option .opt-ticker { font-weight: 700; color: var(--accent); min-width: 52px; }
+  .compare-option .opt-name { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .compare-option .opt-cap { color: var(--text2); font-size: 0.75rem; white-space: nowrap; }
+  .compare-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 12px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid;
+    cursor: default;
+    transition: opacity 0.15s;
+  }
+  .chip-remove {
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+  .chip-remove:hover { opacity: 1; }
+  .compare-metric-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+  .metric-btn {
+    padding: 4px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .metric-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .compare-chart-wrap { position: relative; height: 240px; }
+  .compare-empty {
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text2);
+    font-size: 0.88rem;
+    gap: 8px;
+  }
+  .compare-empty-icon { font-size: 2rem; opacity: 0.4; }
+  .compare-clear {
+    padding: 4px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .compare-clear:hover { border-color: var(--red); color: var(--red); }
+
   /* ── Charts ── */
   .charts-section {
     padding: 20px 24px 0;
@@ -289,6 +416,43 @@
     <button class="btn btn-primary" id="refreshBtn" onclick="refresh()">更新資料</button>
   </div>
 </header>
+
+<!-- ── Compare Section ── -->
+<div class="compare-section">
+  <div class="compare-top">
+    <span class="compare-title">自由比較</span>
+
+    <!-- Search & autocomplete -->
+    <div class="compare-search-wrap">
+      <input class="compare-search" id="compareSearch" placeholder="輸入代碼或公司名稱…" autocomplete="off">
+      <div class="compare-dropdown" id="compareDropdown"></div>
+    </div>
+
+    <!-- Selected chips -->
+    <div class="compare-chips" id="compareChips">
+      <span id="compareHint" style="color:var(--text2);font-size:0.82rem;align-self:center">最多可加入 8 支股票</span>
+    </div>
+
+    <!-- Metric selector -->
+    <div class="compare-metric-btns">
+      <button class="metric-btn active" data-metric="market_cap"  onclick="setMetric('market_cap',this)">市值</button>
+      <button class="metric-btn"        data-metric="price"       onclick="setMetric('price',this)">股價</button>
+      <button class="metric-btn"        data-metric="change_pct"  onclick="setMetric('change_pct',this)">漲跌%</button>
+    </div>
+    <button class="compare-clear" onclick="clearCompare()">清空</button>
+  </div>
+
+  <!-- Chart or empty state -->
+  <div id="compareBody">
+    <div class="compare-empty" id="compareEmpty">
+      <div class="compare-empty-icon">📈</div>
+      搜尋並加入股票，開始比較
+    </div>
+    <div class="compare-chart-wrap" id="compareChartWrap" style="display:none">
+      <canvas id="compareChart"></canvas>
+    </div>
+  </div>
+</div>
 
 <!-- Summary cards -->
 <div class="summary" id="summary">
@@ -593,6 +757,168 @@ async function refresh() {
     btn.textContent = '更新資料';
   }
 }
+
+// ── Compare ───────────────────────────────────────────────────────────────
+const CHIP_COLORS = ['#4f7ef8','#f59e0b','#8b5cf6','#10b981','#ef4444','#06b6d4','#f97316','#e879f9'];
+let compareList = [];   // [{ticker, company_name, market_cap, price, change_pct}]
+let compareMetric = 'market_cap';
+let compareChartInst = null;
+
+function setMetric(m, btn) {
+  compareMetric = m;
+  document.querySelectorAll('.metric-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCompareChart();
+}
+
+function clearCompare() {
+  compareList = [];
+  renderChips();
+  renderCompareChart();
+}
+
+function addToCompare(row) {
+  if (compareList.find(r => r.ticker === row.ticker)) return;
+  if (compareList.length >= 8) { toast('最多比較 8 支股票'); return; }
+  compareList.push(row);
+  renderChips();
+  renderCompareChart();
+  document.getElementById('compareSearch').value = '';
+  document.getElementById('compareDropdown').classList.remove('open');
+}
+
+function removeFromCompare(ticker) {
+  compareList = compareList.filter(r => r.ticker !== ticker);
+  renderChips();
+  renderCompareChart();
+}
+
+function renderChips() {
+  const wrap = document.getElementById('compareChips');
+  const hint = document.getElementById('compareHint');
+  if (!compareList.length) {
+    wrap.innerHTML = '';
+    wrap.appendChild(hint);
+    hint.style.display = '';
+    return;
+  }
+  hint.style.display = 'none';
+  wrap.innerHTML = compareList.map((r, i) => {
+    const c = CHIP_COLORS[i % CHIP_COLORS.length];
+    return `<span class="chip" style="color:${c};border-color:${c};background:${c}22">
+      ${r.ticker}
+      <span class="chip-remove" onclick="removeFromCompare('${r.ticker}')">×</span>
+    </span>`;
+  }).join('');
+  wrap.appendChild(hint);
+}
+
+function renderCompareChart() {
+  const empty = document.getElementById('compareEmpty');
+  const wrap  = document.getElementById('compareChartWrap');
+
+  if (!compareList.length) {
+    empty.style.display = 'flex';
+    wrap.style.display  = 'none';
+    if (compareChartInst) { compareChartInst.destroy(); compareChartInst = null; }
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.style.display  = 'block';
+
+  const labels = compareList.map(r => r.ticker);
+  const raw    = compareList.map(r => r[compareMetric] ?? 0);
+  const colors = compareList.map((_, i) => CHIP_COLORS[i % CHIP_COLORS.length]);
+
+  let data, xLabel, fmt;
+  if (compareMetric === 'market_cap') {
+    data   = raw.map(v => +(v / 1e9).toFixed(2));
+    xLabel = 'USD Billion';
+    fmt    = v => '$' + v + 'B';
+  } else if (compareMetric === 'price') {
+    data   = raw.map(v => +v.toFixed(2));
+    xLabel = 'USD';
+    fmt    = v => '$' + v;
+  } else {
+    data   = raw.map(v => +v.toFixed(2));
+    xLabel = '%';
+    fmt    = v => (v >= 0 ? '+' : '') + v + '%';
+  }
+
+  if (compareChartInst) compareChartInst.destroy();
+  compareChartInst = new Chart(document.getElementById('compareChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(c => c + 'cc'),
+        borderColor: colors,
+        borderWidth: 2,
+        borderRadius: 6,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 350 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ' + fmt(ctx.parsed.y),
+            title: ctx => {
+              const r = compareList[ctx[0].dataIndex];
+              return `${r.ticker} — ${r.company_name}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#e8eaf0', font: { weight: '700', size: 12 } },
+          grid:  { display: false },
+        },
+        y: {
+          title: { display: true, text: xLabel, color: '#9aa0b8', font: { size: 11 } },
+          ticks: { color: '#9aa0b8', callback: v => fmt(v) },
+          grid:  { color: '#2e3148' },
+        },
+      },
+    },
+  });
+}
+
+// Search autocomplete
+document.addEventListener('DOMContentLoaded', () => {
+  const inp  = document.getElementById('compareSearch');
+  const drop = document.getElementById('compareDropdown');
+
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim().toLowerCase();
+    if (!q || !allRows.length) { drop.classList.remove('open'); return; }
+    const hits = allRows
+      .filter(r => r.ticker.toLowerCase().includes(q) || r.company_name.toLowerCase().includes(q))
+      .slice(0, 8);
+    if (!hits.length) { drop.classList.remove('open'); return; }
+    drop.innerHTML = hits.map(r => `
+      <div class="compare-option" onclick='addToCompare(${JSON.stringify(r)})'>
+        <span class="opt-ticker">${r.ticker}</span>
+        <span class="opt-name">${r.company_name}</span>
+        <span class="opt-cap">${fmtCap(r.market_cap)}</span>
+      </div>`).join('');
+    drop.classList.add('open');
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.compare-search-wrap')) drop.classList.remove('open');
+  });
+
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Escape') drop.classList.remove('open');
+  });
+});
 
 // ── Charts ────────────────────────────────────────────────────────────────
 let barN = 10;
