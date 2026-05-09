@@ -13,5 +13,6 @@ import fetcher
 db = Database()
 db.init_db()
 
-count = fetcher.fetch_and_store(db)
+# Always fetch 65 days so missing historical dates backfill automatically
+count = fetcher.fetch_and_store(db, period="65d")
 logging.info(f"Done — {count} new records written")

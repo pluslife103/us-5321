@@ -16,15 +16,24 @@ class Database:
     def init_db(self):
         with self._conn() as conn:
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS ticker_info (
+                    ticker       TEXT PRIMARY KEY,
+                    company_name TEXT DEFAULT '',
+                    sector       TEXT DEFAULT '',
+                    shares       REAL DEFAULT 0,
+                    updated      TEXT DEFAULT ''
+                )
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS market_cap_daily (
-                    date        TEXT,
-                    ticker      TEXT,
+                    date         TEXT,
+                    ticker       TEXT,
                     company_name TEXT,
-                    sector      TEXT,
-                    price       REAL,
-                    market_cap  REAL,
-                    shares      REAL,
-                    change_pct  REAL,
+                    sector       TEXT,
+                    price        REAL,
+                    market_cap   REAL,
+                    shares       REAL,
+                    change_pct   REAL,
                     PRIMARY KEY (date, ticker)
                 )
             """)
@@ -32,12 +41,41 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_mcd_date ON market_cap_daily(date)"
             )
 
+    # ── Shares cache ──────────────────────────────────────────────────────────
+
+    def get_missing_shares(self, tickers):
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT ticker FROM ticker_info WHERE shares > 0"
+            ).fetchall()
+            cached = {r[0] for r in rows}
+        return [t for t in tickers if t not in cached]
+
+    def upsert_ticker_info(self, data):
+        """data: {ticker: {company_name, sector, shares}}"""
+        from datetime import date
+        today = date.today().isoformat()
+        with self._conn() as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO ticker_info (ticker, company_name, sector, shares, updated) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [(t, d.get("company_name", t), d.get("sector", ""), d.get("shares", 0), today)
+                 for t, d in data.items()],
+            )
+
+    def get_all_shares(self):
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT ticker, shares FROM ticker_info WHERE shares > 0"
+            ).fetchall()
+            return {r[0]: r[1] for r in rows}
+
     # ── Queries ───────────────────────────────────────────────────────────────
 
     def get_dates(self):
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT DISTINCT date FROM market_cap_daily ORDER BY date DESC LIMIT 30"
+                "SELECT DISTINCT date FROM market_cap_daily ORDER BY date DESC LIMIT 90"
             ).fetchall()
             return [r[0] for r in rows]
 
@@ -63,7 +101,7 @@ class Database:
                 SELECT
                     COUNT(*) AS total,
                     SUM(market_cap) AS total_cap,
-                    SUM(CASE WHEN market_cap >= 200e9                    THEN 1 ELSE 0 END) AS mega,
+                    SUM(CASE WHEN market_cap >= 200e9                     THEN 1 ELSE 0 END) AS mega,
                     SUM(CASE WHEN market_cap >= 10e9 AND market_cap < 200e9 THEN 1 ELSE 0 END) AS large,
                     SUM(CASE WHEN market_cap >= 2e9  AND market_cap < 10e9  THEN 1 ELSE 0 END) AS mid,
                     SUM(CASE WHEN market_cap >= 300e6 AND market_cap < 2e9  THEN 1 ELSE 0 END) AS small,

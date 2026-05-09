@@ -839,10 +839,14 @@ function renderCompareChart() {
     return;
   }
 
-  // Collect all dates
-  const allDates = [...new Set(
-    Object.values(compareHistory).flat().map(r => r.date)
-  )].sort();
+  // Build fixed 60-day date axis (calendar days, gaps on weekends are fine)
+  const today = new Date();
+  const allDates = [];
+  for (let i = 59; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    allDates.push(d.toISOString().slice(0, 10));
+  }
 
   if (!allDates.length) {
     empty.style.display = 'flex'; wrap.style.display = 'none';
@@ -907,7 +911,7 @@ function renderCompareChart() {
       },
       scales: {
         x: {
-          ticks: { color: '#9aa0b8', maxTicksLimit: 12, maxRotation: 0 },
+          ticks: { color: '#9aa0b8', maxTicksLimit: 10, maxRotation: 30, autoSkip: true },
           grid:  { color: '#2e3148' },
         },
         y: {

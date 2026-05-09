@@ -1,6 +1,7 @@
 """PostgreSQL adapter — used on Vercel + Supabase."""
 import os
 from contextlib import contextmanager
+from datetime import date
 
 import psycopg2
 import psycopg2.extras
@@ -25,6 +26,15 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
+                    CREATE TABLE IF NOT EXISTS ticker_info (
+                        ticker       TEXT PRIMARY KEY,
+                        company_name TEXT DEFAULT '',
+                        sector       TEXT DEFAULT '',
+                        shares       REAL DEFAULT 0,
+                        updated      TEXT DEFAULT ''
+                    )
+                """)
+                cur.execute("""
                     CREATE TABLE IF NOT EXISTS market_cap_daily (
                         date         TEXT,
                         ticker       TEXT,
@@ -40,6 +50,38 @@ class Database:
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_mcd_date ON market_cap_daily(date)"
                 )
+
+    # ── Shares cache ──────────────────────────────────────────────────────────
+
+    def get_missing_shares(self, tickers):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ticker FROM ticker_info WHERE shares > 0")
+                cached = {r["ticker"] for r in cur.fetchall()}
+        return [t for t in tickers if t not in cached]
+
+    def upsert_ticker_info(self, data):
+        """data: {ticker: {company_name, sector, shares}}"""
+        today = date.today().isoformat()
+        rows = [(t, d.get("company_name", t), d.get("sector", ""), d.get("shares", 0), today)
+                for t, d in data.items()]
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                psycopg2.extras.execute_values(cur, """
+                    INSERT INTO ticker_info (ticker, company_name, sector, shares, updated)
+                    VALUES %s
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        company_name = EXCLUDED.company_name,
+                        sector       = EXCLUDED.sector,
+                        shares       = EXCLUDED.shares,
+                        updated      = EXCLUDED.updated
+                """, rows)
+
+    def get_all_shares(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ticker, shares FROM ticker_info WHERE shares > 0")
+                return {r["ticker"]: r["shares"] for r in cur.fetchall()}
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
@@ -75,9 +117,9 @@ class Database:
                 cur.execute(
                     """
                     SELECT
-                        COUNT(*)                                                       AS total,
-                        SUM(market_cap)                                                AS total_cap,
-                        SUM(CASE WHEN market_cap >= 200e9                    THEN 1 ELSE 0 END) AS mega,
+                        COUNT(*)                                                        AS total,
+                        SUM(market_cap)                                                 AS total_cap,
+                        SUM(CASE WHEN market_cap >= 200e9                     THEN 1 ELSE 0 END) AS mega,
                         SUM(CASE WHEN market_cap >= 10e9 AND market_cap < 200e9 THEN 1 ELSE 0 END) AS large,
                         SUM(CASE WHEN market_cap >= 2e9  AND market_cap < 10e9  THEN 1 ELSE 0 END) AS mid,
                         SUM(CASE WHEN market_cap >= 300e6 AND market_cap < 2e9  THEN 1 ELSE 0 END) AS small,
