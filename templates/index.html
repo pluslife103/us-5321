@@ -307,8 +307,11 @@
     font-weight: 800;
     color: #fff;
   }
-  .stats-chip-count.tier-mega  { background: var(--green); }
-  .stats-chip-count.tier-large { background: var(--large); }
+  .stats-chip-count.tier-mega   { background: var(--mega);  }
+  .stats-chip-count.tier-large  { background: var(--large); }
+  .stats-chip-count.tier-mlarge { background: var(--mid);   }
+  .stats-chip-count.tier-mid    { background: var(--small); }
+  .stats-chip-count.tier-small  { background: var(--micro); }
   .stats-summary { font-size: 0.78rem; color: var(--text2); padding-top: 2px; }
 
   /* ── Crossover Alerts ── */
@@ -356,15 +359,21 @@
     gap: 12px;
     flex-wrap: wrap;
   }
-  .crossover-card.tier-mega  { border-left: 3px solid var(--mega); }
-  .crossover-card.tier-large { border-left: 3px solid var(--large); }
+  .crossover-card.tier-mega   { border-left: 3px solid var(--mega); }
+  .crossover-card.tier-large  { border-left: 3px solid var(--large); }
+  .crossover-card.tier-mlarge { border-left: 3px solid var(--mid); }
+  .crossover-card.tier-mid    { border-left: 3px solid var(--small); }
+  .crossover-card.tier-small  { border-left: 3px solid var(--micro); }
   .crossover-tier-badge {
     font-size: 0.7rem; font-weight: 700;
     padding: 2px 7px; border-radius: 8px;
     white-space: nowrap;
   }
-  .tier-badge-mega  { background: rgba(245,158,11,0.15); color: var(--mega);  border: 1px solid rgba(245,158,11,0.3); }
-  .tier-badge-large { background: rgba(59,130,246,0.15);  color: var(--large); border: 1px solid rgba(59,130,246,0.3); }
+  .tier-badge-mega   { background: rgba(245,158,11,0.15); color: var(--mega);  border: 1px solid rgba(245,158,11,0.3); }
+  .tier-badge-large  { background: rgba(59,130,246,0.15);  color: var(--large); border: 1px solid rgba(59,130,246,0.3); }
+  .tier-badge-mlarge { background: rgba(139,92,246,0.15);  color: var(--mid);   border: 1px solid rgba(139,92,246,0.3); }
+  .tier-badge-mid    { background: rgba(16,185,129,0.15);  color: var(--small); border: 1px solid rgba(16,185,129,0.3); }
+  .tier-badge-small  { background: rgba(107,114,128,0.15); color: var(--micro); border: 1px solid rgba(107,114,128,0.3); }
   .crossover-arrow { font-size: 1.1rem; }
   .crossover-stocks { flex: 1; }
   .crossover-main { font-size: 0.88rem; font-weight: 600; color: var(--text); }
@@ -1123,18 +1132,29 @@ async function loadCrossovers(dateStr) {
     });
     const cards = Object.values(grouped).sort((a, b) => b.winner_cap - a.winner_cap);
 
-    const megaCount  = cards.filter(c => c.tier === 'mega').length;
-    const largeCount = cards.filter(c => c.tier === 'large').length;
-    const parts = [];
-    if (megaCount)  parts.push(`Mega ≥$200B ${megaCount} 筆`);
-    if (largeCount) parts.push(`$100B–$200B ${largeCount} 筆`);
+    const TIER_LABELS = {
+      mega: 'Mega ≥$200B', large: '$100B–$200B',
+      mlarge: '$10B–$100B', mid: '$2B–$10B', small: '$300M–$2B',
+    };
+    const tierOrder = ['mega','large','mlarge','mid','small'];
+    const parts = tierOrder
+      .map(t => ({ t, n: cards.filter(c => c.tier === t).length }))
+      .filter(x => x.n > 0)
+      .map(x => `${TIER_LABELS[x.t]} ${x.n} 筆`);
     document.getElementById('crossoverCount').textContent = parts.join('　');
 
     document.getElementById('crossoverList').innerHTML = cards.map(c => {
-      const isMega     = c.tier === 'mega';
-      const badgeClass = isMega ? 'tier-badge-mega' : 'tier-badge-large';
-      const badgeText  = isMega ? 'Mega ≥$200B' : '$100B–$200B';
-      const arrowColor = isMega ? 'var(--mega)' : 'var(--large)';
+      const TIER_META = {
+        mega:   { badge: 'Mega ≥$200B',     color: 'var(--mega)'  },
+        large:  { badge: '$100B–$200B',      color: 'var(--large)' },
+        mlarge: { badge: '$10B–$100B',       color: 'var(--mid)'   },
+        mid:    { badge: '$2B–$10B',         color: 'var(--small)' },
+        small:  { badge: '$300M–$2B',        color: 'var(--micro)' },
+      };
+      const tm         = TIER_META[c.tier] || TIER_META.small;
+      const badgeClass = `tier-badge-${c.tier}`;
+      const badgeText  = tm.badge;
+      const arrowColor = tm.color;
 
       const losersHtml = c.losers.map(e =>
         `<span class="loser-item">

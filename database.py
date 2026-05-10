@@ -2,8 +2,20 @@ import sqlite3
 from pathlib import Path
 
 
+TIERS = [
+    ("mega",     200e9,   None),   # ≥$200B
+    ("large",    100e9,  200e9),   # $100B–$200B
+    ("mlarge",    10e9,  100e9),   # $10B–$100B
+    ("mid",        2e9,   10e9),   # $2B–$10B
+    ("small",    300e6,    2e9),   # $300M–$2B
+]
+TIER_MIN = 300e6   # lowest boundary we care about
+
 def _tier(cap):
-    return "mega" if cap >= 200e9 else "large"
+    for name, lo, hi in TIERS:
+        if cap >= lo and (hi is None or cap < hi):
+            return name
+    return None
 
 
 def _compute_crossovers(rows, target_dates):
@@ -201,59 +213,29 @@ class Database:
         with self._conn() as conn:
             rows = conn.execute(
                 f"SELECT date, ticker, company_name, market_cap FROM market_cap_daily "
-                f"WHERE date IN ({placeholders}) AND market_cap >= 100e9 ORDER BY date",
+                f"WHERE date IN ({placeholders}) AND market_cap >= {TIER_MIN} ORDER BY date",
                 all_needed,
             ).fetchall()
 
         return _compute_crossovers(rows, sorted_dates)
 
     def get_crossovers(self, date_str):
-        """Detect crossovers within ≥200B (mega) and 100B–200B tiers."""
+        """Detect crossovers across all tiers for a single date."""
         with self._conn() as conn:
             prev_row = conn.execute(
                 "SELECT MAX(date) FROM market_cap_daily WHERE date < ?", (date_str,)
             ).fetchone()
-            prev_date = prev_row[0] if prev_row else None
+            prev_date = prev_row[0] if prev_row and prev_row[0] else None
         if not prev_date:
             return []
-
-        def _get(d, lo, hi=None):
-            cond = f"market_cap >= {lo}" if hi is None else f"market_cap >= {lo} AND market_cap < {hi}"
-            with self._conn() as conn:
-                rows = conn.execute(
-                    f"SELECT ticker, company_name, market_cap FROM market_cap_daily "
-                    f"WHERE date = ? AND {cond} ORDER BY market_cap DESC", (d,)
-                ).fetchall()
-            return {r[0]: {"company_name": r[1], "market_cap": r[2]} for r in rows}
-
-        def _detect(today, prev, tier):
-            common = [t for t in today if t in prev]
-            out = []
-            for i in range(len(common)):
-                for j in range(i + 1, len(common)):
-                    a, b = common[i], common[j]
-                    at, bt = today[a]["market_cap"], today[b]["market_cap"]
-                    ap, bp = prev[a]["market_cap"],  prev[b]["market_cap"]
-                    winner = loser = None
-                    if at > bt and ap <= bp: winner, loser = a, b
-                    elif bt > at and bp <= ap: winner, loser = b, a
-                    if winner:
-                        out.append({
-                            "tier": tier,
-                            "winner": winner, "winner_name": today[winner]["company_name"],
-                            "winner_cap": today[winner]["market_cap"],
-                            "winner_prev_cap": prev[winner]["market_cap"],
-                            "loser": loser,   "loser_name":  today[loser]["company_name"],
-                            "loser_cap":  today[loser]["market_cap"],
-                            "loser_prev_cap": prev[loser]["market_cap"],
-                        })
-            return out
-
-        results = (
-            _detect(_get(date_str, 200e9),      _get(prev_date, 200e9),      "mega") +
-            _detect(_get(date_str, 100e9, 200e9), _get(prev_date, 100e9, 200e9), "large")
-        )
-        return sorted(results, key=lambda x: x["winner_cap"], reverse=True)
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"SELECT date, ticker, company_name, market_cap FROM market_cap_daily "
+                f"WHERE date IN (?, ?) AND market_cap >= {TIER_MIN} ORDER BY date",
+                (prev_date, date_str),
+            ).fetchall()
+        events = _compute_crossovers(rows, [date_str])
+        return sorted(events, key=lambda x: x["winner_cap"], reverse=True)
 
     def get_ticker_history(self, tickers):
         placeholders = ",".join("?" * len(tickers))
