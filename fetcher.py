@@ -9,7 +9,7 @@ import yfinance as yf
 warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
-MAX_WORKERS = 30
+MAX_WORKERS = 15   # lower to avoid Yahoo Finance rate-limit with large universe
 BATCH_SIZE  = 200
 
 EXCLUDE_TICKERS = {"GOOG", "GOOGL", "BRK-B"}
