@@ -240,8 +240,13 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    cursor: pointer;
+    user-select: none;
   }
-  .stats-label { font-size: 0.82rem; color: var(--text2); font-weight: 700; }
+  .stats-header:hover .stats-label { color: var(--text); }
+  .stats-label { font-size: 0.82rem; color: var(--text2); font-weight: 700; transition: color 0.15s; }
+  .stats-toggle-icon { font-size: 0.7rem; color: var(--text2); transition: transform 0.2s; margin-left: 2px; }
+  .stats-toggle-icon.collapsed { transform: rotate(-90deg); }
   .stats-tabs { display: flex; gap: 3px; }
   .stats-tab {
     padding: 2px 10px;
@@ -628,9 +633,10 @@
 
 <!-- ── Crossover Stats Bar ── -->
 <div class="crossover-stats" id="crossoverStats">
-  <div class="stats-header">
+  <div class="stats-header" onclick="toggleStatsBody()">
     <span class="stats-label">🔔 異動統計</span>
-    <div class="stats-tabs">
+    <span class="stats-toggle-icon" id="statsToggleIcon">▼</span>
+    <div class="stats-tabs" onclick="event.stopPropagation()">
       <button class="stats-tab active" data-period="day"   onclick="setStatsPeriod('day',this)">當日</button>
       <button class="stats-tab"        data-period="week"  onclick="setStatsPeriod('week',this)">本週</button>
       <button class="stats-tab"        data-period="month" onclick="setStatsPeriod('month',this)">本月</button>
@@ -641,8 +647,10 @@
       <button class="stats-nav-btn" id="statsNext" onclick="shiftStatsPeriod(1)">▶</button>
     </div>
   </div>
-  <div class="stats-chips" id="statsPills"></div>
-  <div class="stats-summary" id="statsSummary"></div>
+  <div id="statsBody">
+    <div class="stats-chips" id="statsPills"></div>
+    <div class="stats-summary" id="statsSummary"></div>
+  </div>
 </div>
 
 <!-- ── Crossover Alerts ── -->
@@ -1026,6 +1034,16 @@ async function setStatsPeriod(period, btn) {
   document.querySelectorAll('.stats-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   loadStatsPills();
+}
+
+let statsBodyOpen = true;
+
+function toggleStatsBody() {
+  statsBodyOpen = !statsBodyOpen;
+  const body = document.getElementById('statsBody');
+  const icon = document.getElementById('statsToggleIcon');
+  body.style.display = statsBodyOpen ? '' : 'none';
+  icon.classList.toggle('collapsed', !statsBodyOpen);
 }
 
 // statsRefDate: the anchor date used for week/month navigation
