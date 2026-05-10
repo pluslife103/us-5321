@@ -38,72 +38,88 @@ def _is_common_stock(ticker: str) -> bool:
     return True
 
 
-_NASDAQ_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://www.nasdaq.com/market-activity/stocks/screener",
-    "Origin": "https://www.nasdaq.com",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-}
-
-_ETF_KEYWORDS = (" etf", " fund", " trust", " portfolio", "ishares", "spdr", "invesco ", "vanguard etf")
+# Exchanges we accept from otherlisted.txt
+# A=AMEX/NYSE American, N=NYSE, P=NYSE Arca, Q=NASDAQ, Z=CBOE BZX, V=IEX
+_VALID_EXCHANGES = {"A", "N", "P", "Q", "Z", "V", "C"}
 
 
-def _fetch_exchange(exchange: str) -> list:
-    url = (
-        "https://api.nasdaq.com/api/screener/stocks"
-        f"?tableonly=true&exchange={exchange}&download=true"
-    )
-    r = requests.get(url, headers=_NASDAQ_HEADERS, timeout=30)
-    r.raise_for_status()
-    rows = r.json().get("data", {}).get("rows", []) or []
-    logger.info(f"{exchange}: {len(rows)} raw rows")
-    return rows
+def _parse_nasdaqlisted(text: str, seen: set, result: list):
+    """Parse nasdaqlisted.txt — NASDAQ-listed stocks with explicit ETF flag."""
+    # Header: Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares
+    for line in text.splitlines()[1:]:
+        parts = line.split("|")
+        if len(parts) < 7:
+            continue
+        ticker   = parts[0].strip()
+        name     = parts[1].strip()
+        is_etf   = parts[6].strip() == "Y"
+        test     = parts[3].strip() == "Y"
+        if not ticker or ticker == "File Creation Time" or is_etf or test:
+            continue
+        if ticker in EXCLUDE_TICKERS or not _is_common_stock(ticker) or ticker in seen:
+            continue
+        seen.add(ticker)
+        result.append({"ticker": ticker, "company_name": name, "sector": ""})
+
+
+def _parse_otherlisted(text: str, seen: set, result: list):
+    """Parse otherlisted.txt — NYSE/AMEX/Arca stocks with explicit ETF flag."""
+    # Header: ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol
+    for line in text.splitlines()[1:]:
+        parts = line.split("|")
+        if len(parts) < 7:
+            continue
+        ticker   = parts[0].strip()
+        name     = parts[1].strip()
+        exchange = parts[2].strip()
+        is_etf   = parts[4].strip() == "Y"
+        test     = parts[6].strip() == "Y"
+        if not ticker or ticker == "File Creation Time" or is_etf or test:
+            continue
+        if exchange not in _VALID_EXCHANGES:
+            continue
+        if ticker in EXCLUDE_TICKERS or not _is_common_stock(ticker) or ticker in seen:
+            continue
+        seen.add(ticker)
+        result.append({"ticker": ticker, "company_name": name, "sector": ""})
 
 
 def get_us_stock_list() -> list:
-    """Return all US common stocks (NYSE+NASDAQ+AMEX), falling back to multi-index Wikipedia list."""
-    result, seen = [], set()
+    """Return all US-listed common stocks (excl. ETFs/options).
 
-    # ── Primary: NASDAQ screener API ──────────────────────────────────────────
-    for exchange in ("NASDAQ", "NYSE", "AMEX"):
+    Primary:  NASDAQ Trader bulk text files — official, daily-updated, ETF-flagged.
+    Fallback: Wikipedia S&P 500/400/600 + NASDAQ 100.
+    """
+    result: list = []
+    seen:   set  = set()
+
+    # ── Primary: NASDAQ Trader text files (no auth, GitHub Actions friendly) ─
+    _TRADER_HDR = {"User-Agent": "Mozilla/5.0 research-bot/1.0"}
+    success = 0
+    for url, parser in [
+        ("https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt", _parse_nasdaqlisted),
+        ("https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",  _parse_otherlisted),
+    ]:
         try:
-            rows = _fetch_exchange(exchange)
-            for row in rows:
-                ticker = str(row.get("symbol", "")).strip().upper().replace(".", "-")
-                if not ticker or ticker in seen:
-                    continue
-                if not _is_common_stock(ticker):
-                    continue
-                name   = str(row.get("name",   "")).strip()
-                sector = str(row.get("sector", "")).strip()
-                nl = name.lower()
-                if any(kw in nl for kw in _ETF_KEYWORDS):
-                    continue
-                seen.add(ticker)
-                result.append({"ticker": ticker, "company_name": name, "sector": sector})
+            r = requests.get(url, headers=_TRADER_HDR, timeout=30)
+            r.raise_for_status()
+            before = len(result)
+            parser(r.text, seen, result)
+            logger.info(f"{url.split('/')[-1]}: +{len(result) - before} stocks")
+            success += 1
         except Exception as e:
-            logger.error(f"Failed to fetch {exchange}: {e}")
+            logger.error(f"NASDAQ Trader fetch failed ({url}): {e}")
 
-    if result:
-        logger.info(f"Total US stocks via NASDAQ API: {len(result)}")
+    if success > 0:
+        logger.info(f"Total US stocks via NASDAQ Trader: {len(result)}")
         return result
 
-    # ── Fallback: Wikipedia indices (S&P 500 + NASDAQ 100 + S&P 400) ─────────
-    logger.warning("NASDAQ API failed — falling back to Wikipedia index lists")
+    # ── Fallback: Wikipedia indices ──────────────────────────────────────────
+    logger.warning("NASDAQ Trader failed — falling back to Wikipedia index lists")
     return _get_wikipedia_fallback()
 
 
 def _wiki_table(url, symbol_col, name_col, sector_col=None) -> list:
-    """Parse a Wikipedia index table into stock dicts."""
     try:
         tables = pd.read_html(url, storage_options={"User-Agent": "Mozilla/5.0"})
         df = tables[0]
@@ -122,29 +138,22 @@ def _wiki_table(url, symbol_col, name_col, sector_col=None) -> list:
 
 def _get_wikipedia_fallback() -> list:
     seen, result = set(), []
-
     sources = [
-        # S&P 500
         ("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
          "Symbol", "Security", "GICS Sector"),
-        # NASDAQ 100
         ("https://en.wikipedia.org/wiki/Nasdaq-100",
          "Ticker", "Company", "GICS Sector"),
-        # S&P 400 MidCap
         ("https://en.wikipedia.org/wiki/List_of_S%26P_400_companies",
          "Ticker symbol", "Company", "GICS Sector"),
-        # S&P 600 SmallCap
         ("https://en.wikipedia.org/wiki/List_of_S%26P_600_companies",
          "Ticker symbol", "Company", "GICS Sector"),
     ]
-
     for url, sym, name, sec in sources:
         for item in _wiki_table(url, sym, name, sec):
             if item["ticker"] not in seen:
                 seen.add(item["ticker"])
                 result.append(item)
-
-    logger.info(f"Wikipedia fallback: {len(result)} tickers (S&P 500+100+400+600)")
+    logger.info(f"Wikipedia fallback: {len(result)} tickers")
     return result
 
 
