@@ -1,6 +1,5 @@
 import logging
 import warnings
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import requests
@@ -9,8 +8,7 @@ import yfinance as yf
 warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
-MAX_WORKERS = 15   # lower to avoid Yahoo Finance rate-limit with large universe
-BATCH_SIZE  = 200
+BATCH_SIZE = 200
 
 EXCLUDE_TICKERS = {"GOOG", "GOOGL", "BRK-B"}
 
@@ -148,52 +146,70 @@ def _get_wikipedia_fallback() -> list:
     return result
 
 
-# ── Shares outstanding (parallel, cached) ────────────────────────────────────
+# ── Market cap bulk fetch (Yahoo Finance quote API) ───────────────────────────
 
-def _fetch_one_shares(item):
-    ticker = item["ticker"]
-    try:
-        t  = yf.Ticker(ticker)
-        fi = t.fast_info                      # single lightweight API call
-        market_cap    = float(getattr(fi, "market_cap",  None) or 0)
-        current_price = float(getattr(fi, "last_price",  None) or 0)
-        shares        = float(getattr(fi, "shares",       None) or 0)
-
-        if market_cap > 0 and current_price > 0:
-            effective_shares = market_cap / current_price
-        elif shares > 0:
-            effective_shares = shares
-        else:
-            return {"ticker": ticker, "ok": False}   # no usable data
-
-        return {
-            "ticker":       ticker,
-            "company_name": item["company_name"],
-            "sector":       item.get("sector", ""),
-            "shares":       effective_shares,
-            "ok":           True,
-        }
-    except Exception as e:
-        logger.debug(f"{ticker}: {e}")
-        return {"ticker": ticker, "ok": False}
+_YF_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+_YF_FIELDS    = "symbol,marketCap,regularMarketPrice,sharesOutstanding,longName,shortName,sector,quoteType"
+_YF_HEADERS   = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+_CHUNK        = 100   # tickers per request
 
 
-def fetch_shares_parallel(items, max_workers=MAX_WORKERS):
-    results = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_fetch_one_shares, it): it for it in items}
-        done = 0
-        for fut in as_completed(futures):
-            r = fut.result()
-            done += 1
-            if r["ok"] and r["shares"] > 0:
-                results[r["ticker"]] = {
-                    "company_name": r["company_name"],
-                    "sector":       r["sector"],
-                    "shares":       r["shares"],
+def fetch_shares_bulk(items: list, info_map: dict) -> dict:
+    """Fetch market caps for all items using Yahoo Finance bulk quote API.
+    Returns {ticker: {company_name, sector, shares}}.
+    70 requests for 7000 stocks vs 7000 individual calls.
+    """
+    tickers = [it["ticker"] for it in items]
+    results: dict = {}
+
+    for i in range(0, len(tickers), _CHUNK):
+        batch = tickers[i: i + _CHUNK]
+        try:
+            r = requests.get(
+                _YF_QUOTE_URL,
+                params={"symbols": ",".join(batch), "fields": _YF_FIELDS},
+                headers=_YF_HEADERS,
+                timeout=20,
+            )
+            r.raise_for_status()
+            quotes = r.json().get("quoteResponse", {}).get("result", []) or []
+
+            for q in quotes:
+                t = q.get("symbol", "")
+                if not t:
+                    continue
+                qtype = q.get("quoteType", "")
+                if qtype not in ("EQUITY", ""):   # skip ETF, CRYPTOCURRENCY, etc.
+                    continue
+
+                market_cap = float(q.get("marketCap")          or 0)
+                price      = float(q.get("regularMarketPrice") or 0)
+                shares_out = float(q.get("sharesOutstanding")  or 0)
+
+                if market_cap > 0 and price > 0:
+                    effective_shares = market_cap / price
+                elif shares_out > 0:
+                    effective_shares = shares_out
+                else:
+                    continue    # no usable data for this ticker
+
+                src = info_map.get(t, {})
+                company_name = (q.get("longName") or q.get("shortName")
+                                or src.get("company_name", t))
+                sector = q.get("sector") or src.get("sector", "")
+
+                results[t] = {
+                    "company_name": company_name,
+                    "sector":       sector,
+                    "shares":       effective_shares,
                 }
-            if done % 200 == 0:
-                logger.info(f"  shares fetched: {done}/{len(items)}")
+        except Exception as e:
+            logger.error(f"Bulk quote fetch failed (batch {i // _CHUNK + 1}): {e}")
+
+        if (i // _CHUNK + 1) % 10 == 0:
+            logger.info(f"  bulk quote batches done: {i // _CHUNK + 1}/{(len(tickers) + _CHUNK - 1) // _CHUNK}")
+
+    logger.info(f"Bulk fetch: got data for {len(results)}/{len(tickers)} tickers")
     return results
 
 
@@ -239,14 +255,14 @@ def fetch_and_store(db, period="65d"):
     info_map    = {s["ticker"]: s for s in stocks}
     logger.info(f"Stock universe: {len(all_tickers)} tickers")
 
-    # 1. Fetch shares for new/uncached tickers only
+    # 1. Fetch market caps for new/uncached tickers (bulk API, ~1 min for 7000 stocks)
     missing = db.get_missing_shares(all_tickers)
     if missing:
-        logger.info(f"Fetching shares for {len(missing)} new tickers…")
+        logger.info(f"Bulk-fetching market cap for {len(missing)} new tickers…")
         missing_items = [info_map[t] for t in missing if t in info_map]
-        shares_data   = fetch_shares_parallel(missing_items)
+        shares_data   = fetch_shares_bulk(missing_items, info_map)
         db.upsert_ticker_info(shares_data)
-        logger.info(f"Cached {len(shares_data)} tickers' shares")
+        logger.info(f"Cached {len(shares_data)}/{len(missing)} tickers")
 
     shares_map = db.get_all_shares()
 

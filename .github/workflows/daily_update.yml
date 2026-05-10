@@ -21,7 +21,7 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 60        # full universe can take 20-40 min on first run
+    timeout-minutes: 30        # bulk quote API: ~1 min for 7000 stocks
     steps:
       - uses: actions/checkout@v4
 
