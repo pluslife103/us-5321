@@ -222,46 +222,29 @@
   .state-msg .icon { font-size: 2.5rem; margin-bottom: 12px; }
   .state-msg p { font-size: 0.95rem; }
 
-  /* ── Crossover Stats Bar ── */
+  /* ── Crossover Stats Block ── */
   .crossover-stats {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 7px 24px;
+    padding: 10px 24px 12px;
     display: none;
-    align-items: center;
+    flex-direction: column;
     gap: 8px;
-    overflow-x: auto;
-    white-space: nowrap;
     position: sticky;
     top: 61px;
     z-index: 90;
   }
   .crossover-stats.visible { display: flex; }
-  .stats-label { font-size: 0.78rem; color: var(--text2); font-weight: 600; flex-shrink: 0; }
-  .stats-pill {
-    display: inline-flex;
+  .stats-header {
+    display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    border-radius: 14px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    border: 1px solid;
-    flex-shrink: 0;
-    cursor: default;
+    gap: 8px;
+    flex-wrap: wrap;
   }
-  .stats-pill.tier-mega  { color: var(--mega);  border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.1); }
-  .stats-pill.tier-large { color: var(--large); border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.1); }
-  .stats-pill-count {
-    background: rgba(255,255,255,0.15);
-    border-radius: 8px;
-    padding: 0 5px;
-    font-size: 0.72rem;
-  }
-  .stats-sep { color: var(--border); flex-shrink: 0; }
-  .stats-tabs { display: flex; gap: 2px; flex-shrink: 0; }
+  .stats-label { font-size: 0.82rem; color: var(--text2); font-weight: 700; }
+  .stats-tabs { display: flex; gap: 3px; }
   .stats-tab {
-    padding: 2px 9px;
+    padding: 2px 10px;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: transparent;
@@ -271,8 +254,41 @@
     cursor: pointer;
     transition: all 0.15s;
   }
-  .stats-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .stats-divider { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; margin: 0 4px; }
+  .stats-tab.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .stats-period-label { font-size: 0.78rem; color: var(--text2); margin-left: 4px; }
+  .stats-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .stats-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px 4px 10px;
+    border-radius: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text);
+    font-weight: 500;
+    cursor: default;
+  }
+  .stats-chip-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-chip-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #fff;
+  }
+  .stats-chip-count.tier-mega  { background: var(--green); }
+  .stats-chip-count.tier-large { background: var(--large); }
+  .stats-summary { font-size: 0.78rem; color: var(--text2); padding-top: 2px; }
 
   /* ── Crossover Alerts ── */
   .crossover-bar {
@@ -582,14 +598,17 @@
 
 <!-- ── Crossover Stats Bar ── -->
 <div class="crossover-stats" id="crossoverStats">
-  <span class="stats-label">異動統計</span>
-  <div class="stats-tabs">
-    <button class="stats-tab active" data-period="day"   onclick="setStatsPeriod('day',this)">今日</button>
-    <button class="stats-tab"        data-period="week"  onclick="setStatsPeriod('week',this)">本週</button>
-    <button class="stats-tab"        data-period="month" onclick="setStatsPeriod('month',this)">本月</button>
+  <div class="stats-header">
+    <span class="stats-label">🔔 異動統計</span>
+    <div class="stats-tabs">
+      <button class="stats-tab active" data-period="day"   onclick="setStatsPeriod('day',this)">當日</button>
+      <button class="stats-tab"        data-period="week"  onclick="setStatsPeriod('week',this)">本週</button>
+      <button class="stats-tab"        data-period="month" onclick="setStatsPeriod('month',this)">本月</button>
+    </div>
+    <span class="stats-period-label" id="statsPeriodLabel"></span>
   </div>
-  <div class="stats-divider"></div>
-  <div id="statsPills" style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap"></div>
+  <div class="stats-chips" id="statsPills"></div>
+  <div class="stats-summary" id="statsSummary"></div>
 </div>
 
 <!-- ── Crossover Alerts ── -->
@@ -971,18 +990,38 @@ async function setStatsPeriod(period, btn) {
   statsPeriod = period;
   document.querySelectorAll('.stats-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  await loadStatsPills(currentDateStr, period);
+  loadStatsPills(currentDateStr, period);
 }
 
-function renderStatsPills(items) {
+function renderStatsPills(items, dateStr, period) {
   const container = document.getElementById('statsPills');
-  if (!items.length) { container.innerHTML = '<span style="color:var(--text2);font-size:0.75rem">無異動</span>'; return; }
-  container.innerHTML = items.map((item, i) =>
-    `${i > 0 ? '<span class="stats-sep">·</span>' : ''}
-     <span class="stats-pill tier-${item.tier}">
-       ${item.winner} 超越 <span class="stats-pill-count">${item.count}</span> 次
+  const summary   = document.getElementById('statsSummary');
+  const periodLbl = document.getElementById('statsPeriodLabel');
+
+  // Period label
+  if (period === 'month' && dateStr) periodLbl.textContent = dateStr.slice(0, 7);
+  else if (period === 'week' && dateStr) {
+    const d = new Date(dateStr);
+    const mon = new Date(d); mon.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
+    periodLbl.textContent = mon.toISOString().slice(0, 10) + ' 週';
+  } else periodLbl.textContent = dateStr || '';
+
+  if (!items.length) {
+    container.innerHTML = '<span style="color:var(--text2);font-size:0.78rem">本期無超越事件</span>';
+    summary.textContent = '';
+    return;
+  }
+
+  container.innerHTML = items.map(item =>
+    `<span class="stats-chip">
+       <span class="stats-chip-name">${item.winner} ${item.winner_name}</span>
+       <span class="stats-chip-count tier-${item.tier}">${item.count}次</span>
      </span>`
   ).join('');
+
+  const totalEvents   = items.reduce((s, i) => s + i.count, 0);
+  const totalCompanies = items.length;
+  summary.textContent = `共 ${totalEvents} 次超越事件，${totalCompanies} 間公司曾超越他人`;
 }
 
 async function loadStatsPills(dateStr, period = statsPeriod) {
@@ -990,9 +1029,11 @@ async function loadStatsPills(dateStr, period = statsPeriod) {
   try {
     const qs    = `period=${period}${dateStr ? '&date=' + dateStr : ''}`;
     const items = await fetch(`/api/crossover-stats?${qs}`).then(r => r.json());
-    if (!items.length) { stats.classList.remove('visible'); return; }
+    if (!items.length) {
+      stats.classList.remove('visible'); return;
+    }
     stats.classList.add('visible');
-    renderStatsPills(items);
+    renderStatsPills(items, dateStr, period);
   } catch(e) {
     stats.classList.remove('visible');
   }
