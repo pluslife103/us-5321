@@ -1,6 +1,57 @@
 import sqlite3
 from pathlib import Path
 
+
+def _tier(cap):
+    return "mega" if cap >= 200e9 else "large"
+
+
+def _compute_crossovers(rows, target_dates):
+    """Detect crossovers from raw DB rows across consecutive dates."""
+    # Build {date: {ticker: {company_name, market_cap, tier}}}
+    by_date = {}
+    for r in rows:
+        d, t, name, cap = r[0], r[1], r[2], r[3]
+        if d not in by_date:
+            by_date[d] = {}
+        by_date[d][t] = {"company_name": name, "market_cap": float(cap), "tier": _tier(float(cap))}
+
+    all_dates = sorted(by_date.keys())
+    events = []
+
+    for i in range(1, len(all_dates)):
+        today_str, prev_str = all_dates[i], all_dates[i - 1]
+        if today_str not in set(target_dates):
+            continue
+        today, prev = by_date[today_str], by_date[prev_str]
+        common = [t for t in today if t in prev]
+
+        for j in range(len(common)):
+            for k in range(j + 1, len(common)):
+                a, b = common[j], common[k]
+                # Only compare within same tier
+                if today[a]["tier"] != today[b]["tier"]:
+                    continue
+                at, bt = today[a]["market_cap"], today[b]["market_cap"]
+                ap, bp = prev[a]["market_cap"],  prev[b]["market_cap"]
+                winner = loser = None
+                if at > bt and ap <= bp: winner, loser = a, b
+                elif bt > at and bp <= ap: winner, loser = b, a
+                if winner:
+                    events.append({
+                        "date":             today_str,
+                        "tier":             today[winner]["tier"],
+                        "winner":           winner,
+                        "winner_name":      today[winner]["company_name"],
+                        "winner_cap":       today[winner]["market_cap"],
+                        "winner_prev_cap":  prev[winner]["market_cap"],
+                        "loser":            loser,
+                        "loser_name":       today[loser]["company_name"],
+                        "loser_cap":        today[loser]["market_cap"],
+                        "loser_prev_cap":   prev[loser]["market_cap"],
+                    })
+    return events
+
 DB_PATH = Path(__file__).parent / "us_market_cap.db"
 
 
@@ -128,6 +179,33 @@ class Database:
                 (date_str,),
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def get_crossovers_batch(self, dates):
+        """Fetch all mega/large cap rows for given dates + their prev day in ONE query,
+        then detect crossovers in Python. Much faster than calling get_crossovers() N times."""
+        if not dates:
+            return []
+
+        sorted_dates = sorted(set(dates))
+
+        # Also need the trading day before the first date to detect crossovers on day 0
+        with self._conn() as conn:
+            prev_row = conn.execute(
+                "SELECT MAX(date) FROM market_cap_daily WHERE date < ?", (sorted_dates[0],)
+            ).fetchone()
+            first_prev = prev_row[0] if prev_row and prev_row[0] else None
+
+        all_needed = ([first_prev] if first_prev else []) + sorted_dates
+        placeholders = ",".join("?" * len(all_needed))
+
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"SELECT date, ticker, company_name, market_cap FROM market_cap_daily "
+                f"WHERE date IN ({placeholders}) AND market_cap >= 100e9 ORDER BY date",
+                all_needed,
+            ).fetchall()
+
+        return _compute_crossovers(rows, sorted_dates)
 
     def get_crossovers(self, date_str):
         """Detect crossovers within ≥200B (mega) and 100B–200B tiers."""

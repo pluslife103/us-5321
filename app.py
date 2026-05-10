@@ -91,16 +91,17 @@ def api_crossover_stats():
         period_dates = [anchor]
         meta = {}
 
+    events = db.get_crossovers_batch(period_dates)
+
     stats = {}
-    for dt in period_dates:
-        for e in db.get_crossovers(dt):
-            key = e["winner"]
-            if key not in stats:
-                stats[key] = {"winner": key, "winner_name": e["winner_name"],
-                              "count": 0, "tier": e["tier"]}
-            stats[key]["count"] += 1
-            if e["tier"] == "mega":
-                stats[key]["tier"] = "mega"
+    for e in events:
+        key = e["winner"]
+        if key not in stats:
+            stats[key] = {"winner": key, "winner_name": e["winner_name"],
+                          "count": 0, "tier": e["tier"]}
+        stats[key]["count"] += 1
+        if e["tier"] == "mega":
+            stats[key]["tier"] = "mega"
 
     return jsonify({
         "meta":  meta,

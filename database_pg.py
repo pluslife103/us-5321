@@ -1,4 +1,5 @@
 """PostgreSQL adapter — used on Vercel + Supabase."""
+from database import _compute_crossovers   # shared helper
 import os
 from contextlib import contextmanager
 from datetime import date
@@ -148,6 +149,34 @@ class Database:
                     (date_str,),
                 )
                 return [dict(r) for r in cur.fetchall()]
+
+    def get_crossovers_batch(self, dates):
+        """Batch crossover detection — 2 DB queries for any period size."""
+        if not dates:
+            return []
+        sorted_dates = sorted(set(dates))
+
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT MAX(date) FROM market_cap_daily WHERE date < %s", (sorted_dates[0],)
+                )
+                row = cur.fetchone()
+                first_prev = row["max"] if row and row["max"] else None
+
+        all_needed = ([first_prev] if first_prev else []) + sorted_dates
+
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT date, ticker, company_name, market_cap FROM market_cap_daily "
+                    "WHERE date = ANY(%s) AND market_cap >= 100e9 ORDER BY date",
+                    (all_needed,),
+                )
+                rows = [(r["date"], r["ticker"], r["company_name"], r["market_cap"])
+                        for r in cur.fetchall()]
+
+        return _compute_crossovers(rows, sorted_dates)
 
     def get_crossovers(self, date_str):
         """Detect crossovers within ≥200B (mega) and 100B–200B tiers."""
