@@ -249,7 +249,13 @@ class Database:
 
     # ── Writes ────────────────────────────────────────────────────────────────
 
+    def clear_prices(self):
+        """Clear only price/market-cap data; keep shares cache (ticker_info)."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM market_cap_daily")
+
     def clear_all(self):
+        """Full reset — clears both prices and shares cache."""
         with self._conn() as conn:
             conn.execute("DELETE FROM ticker_info")
             conn.execute("DELETE FROM market_cap_daily")

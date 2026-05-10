@@ -14,27 +14,18 @@ BATCH_SIZE  = 200
 
 EXCLUDE_TICKERS = {"GOOG", "GOOGL", "BRK-B"}
 
-# Suffixes that indicate non-common-stock instruments
-_BAD_ENDS = ("W", "WS", "WI", "R", "RI", "U", "Q", "P", "A", "B")
-
-
 # ── Stock list ────────────────────────────────────────────────────────────────
 
 def _is_common_stock(ticker: str) -> bool:
-    """Rough filter: skip warrants, rights, units, preferred, bankrupt stubs."""
+    """Light filter — NASDAQ Trader files already have explicit ETF flags.
+    Only reject tickers with special chars or obviously non-stock formats."""
     if ticker in EXCLUDE_TICKERS:
         return False
-    if len(ticker) > 5:          # tickers longer than 5 chars are usually derivatives
+    if not ticker or len(ticker) > 6:
         return False
-    if any(c in ticker for c in ("^", "~", "/")):
+    # Special chars indicate options, indices, futures
+    if any(c in ticker for c in ("^", "~", "/", "+", "$", ".", "*")):
         return False
-    # Skip e.g. "AAAPLW" (warrant) or "XYZR" (right) by checking trailing letter patterns
-    for suf in _BAD_ENDS:
-        if len(ticker) > len(suf) and ticker.endswith(suf) and ticker[-len(suf)-1:][0].isdigit() is False:
-            # heuristic: only flag if last non-suffix part looks like a normal ticker
-            stripped = ticker[: -len(suf)]
-            if stripped.isalpha() and len(stripped) >= 2:
-                return False
     return True
 
 
@@ -162,18 +153,23 @@ def _get_wikipedia_fallback() -> list:
 def _fetch_one_shares(item):
     ticker = item["ticker"]
     try:
-        info          = yf.Ticker(ticker).info
-        market_cap    = float(info.get("marketCap")    or 0)
-        current_price = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0)
-        effective_shares = (
-            market_cap / current_price
-            if market_cap > 0 and current_price > 0
-            else float(info.get("sharesOutstanding") or 0)
-        )
+        t  = yf.Ticker(ticker)
+        fi = t.fast_info                      # single lightweight API call
+        market_cap    = float(getattr(fi, "market_cap",  None) or 0)
+        current_price = float(getattr(fi, "last_price",  None) or 0)
+        shares        = float(getattr(fi, "shares",       None) or 0)
+
+        if market_cap > 0 and current_price > 0:
+            effective_shares = market_cap / current_price
+        elif shares > 0:
+            effective_shares = shares
+        else:
+            return {"ticker": ticker, "ok": False}   # no usable data
+
         return {
             "ticker":       ticker,
-            "company_name": info.get("longName") or info.get("shortName") or item["company_name"],
-            "sector":       info.get("sector") or item.get("sector") or "",
+            "company_name": item["company_name"],
+            "sector":       item.get("sector", ""),
             "shares":       effective_shares,
             "ok":           True,
         }

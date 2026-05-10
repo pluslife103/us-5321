@@ -276,6 +276,11 @@ class Database:
 
     # ── Writes ────────────────────────────────────────────────────────────────
 
+    def clear_prices(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM market_cap_daily")
+
     def clear_all(self):
         with self._conn() as conn:
             with conn.cursor() as cur:

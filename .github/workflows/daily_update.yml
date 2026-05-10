@@ -6,7 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       force_refetch:
-        description: '清空並重新抓取所有歷史資料（修正錯誤資料用）'
+        description: '清空價格資料重抓（保留 shares 快取，較快）'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      clear_shares:
+        description: '同時清空 shares 快取（完整重置，第一次擴大股票池時用）'
         required: false
         default: 'false'
         type: choice
@@ -30,4 +36,5 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           FORCE_REFETCH: ${{ github.event.inputs.force_refetch || 'false' }}
+          CLEAR_SHARES:  ${{ github.event.inputs.clear_shares  || 'false' }}
         run: python daily_fetch.py
