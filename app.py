@@ -73,7 +73,7 @@ def api_crossover_stats():
 
     all_dates = sorted(db.get_dates())
     if not all_dates:
-        return jsonify([])
+        return jsonify({"meta": {}, "items": []})
 
     anchor = ref_date or all_dates[-1]
 

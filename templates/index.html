@@ -1049,8 +1049,7 @@ function renderStatsPills(result) {
   if (statsPeriod === 'week') {
     nav.classList.add('visible');
     const fmt = s => s ? s.slice(5).replace('-', '/') : '';
-    periodLbl.textContent = meta.start ? `${fmt(meta.start)} – ${fmt(meta.end)}` : '';
-    // Disable ▶ when ref week contains or is after the current date
+    periodLbl.textContent = (meta && meta.start) ? `${fmt(meta.start)} – ${fmt(meta.end)}` : '';
     const refD = new Date((statsRefDate || currentDateStr) + 'T00:00:00');
     const curD = new Date(currentDateStr + 'T00:00:00');
     const refMon = new Date(refD); refMon.setDate(refD.getDate() - refD.getDay() + (refD.getDay() === 0 ? -6 : 1));
@@ -1058,7 +1057,7 @@ function renderStatsPills(result) {
     nextBtn.disabled = refMon >= curMon;
   } else if (statsPeriod === 'month') {
     nav.classList.add('visible');
-    periodLbl.textContent = meta.ym || (statsRefDate || currentDateStr).slice(0, 7);
+    periodLbl.textContent = (meta && meta.ym) || (statsRefDate || currentDateStr).slice(0, 7);
     const refYM = (statsRefDate || currentDateStr).slice(0, 7);
     const curYM = currentDateStr.slice(0, 7);
     nextBtn.disabled = refYM >= curYM;
