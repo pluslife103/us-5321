@@ -1,7 +1,7 @@
 import logging
 import os
 import threading
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from flask import Flask, jsonify, render_template, request
 
@@ -61,6 +61,42 @@ def api_crossovers():
             return jsonify([])
         date_str = dates[0]
     return jsonify(db.get_crossovers(date_str))
+
+
+@app.route("/api/crossover-stats")
+def api_crossover_stats():
+    """Aggregate crossover winner counts for day / week / month."""
+    date_str = request.args.get("date")
+    period   = request.args.get("period", "day")   # day | week | month
+
+    all_dates = sorted(db.get_dates())              # ascending
+    if not all_dates:
+        return jsonify([])
+    if not date_str:
+        date_str = all_dates[-1]
+
+    if period == "week":
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+        week_start = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
+        period_dates = [dt for dt in all_dates if week_start <= dt <= date_str]
+    elif period == "month":
+        period_dates = [dt for dt in all_dates
+                        if dt[:7] == date_str[:7] and dt <= date_str]
+    else:
+        period_dates = [date_str]
+
+    stats = {}
+    for dt in period_dates:
+        for e in db.get_crossovers(dt):
+            key = e["winner"]
+            if key not in stats:
+                stats[key] = {"winner": key, "winner_name": e["winner_name"],
+                              "count": 0, "tier": e["tier"]}
+            stats[key]["count"] += 1
+            if e["tier"] == "mega":
+                stats[key]["tier"] = "mega"
+
+    return jsonify(sorted(stats.values(), key=lambda x: x["count"], reverse=True))
 
 
 @app.route("/api/history")

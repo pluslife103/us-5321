@@ -259,6 +259,20 @@
     font-size: 0.72rem;
   }
   .stats-sep { color: var(--border); flex-shrink: 0; }
+  .stats-tabs { display: flex; gap: 2px; flex-shrink: 0; }
+  .stats-tab {
+    padding: 2px 9px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .stats-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stats-divider { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; margin: 0 4px; }
 
   /* ── Crossover Alerts ── */
   .crossover-bar {
@@ -568,8 +582,14 @@
 
 <!-- ── Crossover Stats Bar ── -->
 <div class="crossover-stats" id="crossoverStats">
-  <span class="stats-label">今日異動</span>
-  <div id="statsPills"></div>
+  <span class="stats-label">異動統計</span>
+  <div class="stats-tabs">
+    <button class="stats-tab active" data-period="day"   onclick="setStatsPeriod('day',this)">今日</button>
+    <button class="stats-tab"        data-period="week"  onclick="setStatsPeriod('week',this)">本週</button>
+    <button class="stats-tab"        data-period="month" onclick="setStatsPeriod('month',this)">本月</button>
+  </div>
+  <div class="stats-divider"></div>
+  <div id="statsPills" style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap"></div>
 </div>
 
 <!-- ── Crossover Alerts ── -->
@@ -937,7 +957,9 @@ async function refresh() {
 }
 
 // ── Crossover Alerts ─────────────────────────────────────────────────────
-let crossoverOpen = true;
+let crossoverOpen  = true;
+let statsPeriod    = 'day';
+let currentDateStr = '';
 
 function toggleCrossovers() {
   crossoverOpen = !crossoverOpen;
@@ -945,38 +967,50 @@ function toggleCrossovers() {
   document.getElementById('crossoverChevron').classList.toggle('open', crossoverOpen);
 }
 
+async function setStatsPeriod(period, btn) {
+  statsPeriod = period;
+  document.querySelectorAll('.stats-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  await loadStatsPills(currentDateStr, period);
+}
+
+function renderStatsPills(items) {
+  const container = document.getElementById('statsPills');
+  if (!items.length) { container.innerHTML = '<span style="color:var(--text2);font-size:0.75rem">無異動</span>'; return; }
+  container.innerHTML = items.map((item, i) =>
+    `${i > 0 ? '<span class="stats-sep">·</span>' : ''}
+     <span class="stats-pill tier-${item.tier}">
+       ${item.winner} 超越 <span class="stats-pill-count">${item.count}</span> 次
+     </span>`
+  ).join('');
+}
+
+async function loadStatsPills(dateStr, period = statsPeriod) {
+  const stats = document.getElementById('crossoverStats');
+  try {
+    const qs    = `period=${period}${dateStr ? '&date=' + dateStr : ''}`;
+    const items = await fetch(`/api/crossover-stats?${qs}`).then(r => r.json());
+    if (!items.length) { stats.classList.remove('visible'); return; }
+    stats.classList.add('visible');
+    renderStatsPills(items);
+  } catch(e) {
+    stats.classList.remove('visible');
+  }
+}
+
 async function loadCrossovers(dateStr) {
+  currentDateStr = dateStr || '';
   const bar   = document.getElementById('crossoverBar');
   const stats = document.getElementById('crossoverStats');
+
+  // Load stats bar (today/week/month) in parallel
+  loadStatsPills(dateStr, statsPeriod);
+
   try {
     const url = dateStr ? `/api/crossovers?date=${dateStr}` : '/api/crossovers';
     const events = await fetch(url).then(r => r.json());
 
-    if (!events.length) {
-      bar.style.display = 'none';
-      stats.classList.remove('visible');
-      return;
-    }
-
-    // ── Stats bar ──────────────────────────────────────────────────────────
-    // Count how many companies each winner surpassed
-    const winnerCount = {};
-    const winnerTier  = {};
-    events.forEach(e => {
-      winnerCount[e.winner] = (winnerCount[e.winner] || 0) + 1;
-      // prefer mega tier label if any event is mega
-      if (!winnerTier[e.winner] || e.tier === 'mega') winnerTier[e.winner] = e.tier;
-    });
-    const sorted = Object.entries(winnerCount).sort((a, b) => b[1] - a[1]);
-
-    document.getElementById('statsPills').innerHTML = sorted.map(([ticker, cnt], i) => {
-      const tier = winnerTier[ticker];
-      return `${i > 0 ? '<span class="stats-sep">·</span>' : ''}
-        <span class="stats-pill tier-${tier}">
-          ${ticker} 超越 <span class="stats-pill-count">${cnt}</span> 次
-        </span>`;
-    }).join('');
-    stats.classList.add('visible');
+    if (!events.length) { bar.style.display = 'none'; return; }
 
     bar.style.display = 'block';
     document.getElementById('crossoverDate').textContent = dateStr || '';
@@ -1028,7 +1062,6 @@ async function loadCrossovers(dateStr) {
     }).join('');
   } catch(err) {
     bar.style.display = 'none';
-    document.getElementById('crossoverStats').classList.remove('visible');
   }
 }
 
