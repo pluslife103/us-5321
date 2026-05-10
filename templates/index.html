@@ -255,7 +255,28 @@
     transition: all 0.15s;
   }
   .stats-tab.active { background: var(--green); border-color: var(--green); color: #fff; }
-  .stats-period-label { font-size: 0.78rem; color: var(--text2); margin-left: 4px; }
+  .stats-nav {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+  }
+  .stats-nav.visible { display: flex; }
+  .stats-nav-btn {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
+  }
+  .stats-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .stats-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .stats-period-label { font-size: 0.78rem; color: var(--text); font-weight: 600; min-width: 100px; text-align: center; }
   .stats-chips {
     display: flex;
     flex-wrap: wrap;
@@ -605,7 +626,11 @@
       <button class="stats-tab"        data-period="week"  onclick="setStatsPeriod('week',this)">本週</button>
       <button class="stats-tab"        data-period="month" onclick="setStatsPeriod('month',this)">本月</button>
     </div>
-    <span class="stats-period-label" id="statsPeriodLabel"></span>
+    <div class="stats-nav" id="statsNav">
+      <button class="stats-nav-btn" id="statsPrev" onclick="shiftStatsPeriod(-1)">◀</button>
+      <span class="stats-period-label" id="statsPeriodLabel"></span>
+      <button class="stats-nav-btn" id="statsNext" onclick="shiftStatsPeriod(1)">▶</button>
+    </div>
   </div>
   <div class="stats-chips" id="statsPills"></div>
   <div class="stats-summary" id="statsSummary"></div>
@@ -987,24 +1012,59 @@ function toggleCrossovers() {
 }
 
 async function setStatsPeriod(period, btn) {
-  statsPeriod = period;
+  statsPeriod  = period;
+  statsRefDate = currentDateStr;   // reset to current date on tab switch
   document.querySelectorAll('.stats-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   loadStatsPills(currentDateStr, period);
 }
 
-function renderStatsPills(items, dateStr, period) {
+// statsRefDate: anchor date string for week/month navigation
+let statsRefDate = '';
+
+function shiftStatsPeriod(dir) {
+  if (statsPeriod === 'week') {
+    const d = new Date(statsRefDate || currentDateStr || new Date());
+    d.setDate(d.getDate() + dir * 7);
+    statsRefDate = d.toISOString().slice(0, 10);
+  } else if (statsPeriod === 'month') {
+    const [y, m] = (statsRefDate || currentDateStr || new Date().toISOString().slice(0,10)).slice(0,7).split('-').map(Number);
+    const nd = new Date(y, m - 1 + dir, 1);
+    statsRefDate = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-01`;
+  }
+  loadStatsPills(currentDateStr, statsPeriod);
+}
+
+function renderStatsPills(result) {
+  const { meta, items } = result;
   const container = document.getElementById('statsPills');
   const summary   = document.getElementById('statsSummary');
   const periodLbl = document.getElementById('statsPeriodLabel');
+  const nav       = document.getElementById('statsNav');
+  const prevBtn   = document.getElementById('statsPrev');
+  const nextBtn   = document.getElementById('statsNext');
 
-  // Period label
-  if (period === 'month' && dateStr) periodLbl.textContent = dateStr.slice(0, 7);
-  else if (period === 'week' && dateStr) {
-    const d = new Date(dateStr);
-    const mon = new Date(d); mon.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
-    periodLbl.textContent = mon.toISOString().slice(0, 10) + ' 週';
-  } else periodLbl.textContent = dateStr || '';
+  // Show/hide nav and set label
+  if (statsPeriod === 'week') {
+    nav.classList.add('visible');
+    if (meta.start && meta.end) {
+      const fmt = s => s.slice(5).replace('-', '/');
+      periodLbl.textContent = `${fmt(meta.start)} – ${fmt(meta.end)}`;
+    }
+    // Disable ▶ if at or beyond currentDateStr week
+    const refMon = statsRefDate || currentDateStr;
+    const curMon = currentDateStr;
+    nextBtn.disabled = refMon >= curMon;
+  } else if (statsPeriod === 'month') {
+    nav.classList.add('visible');
+    periodLbl.textContent = meta.ym || statsRefDate?.slice(0,7) || '';
+    const refYM = (statsRefDate || currentDateStr || '').slice(0, 7);
+    const curYM = currentDateStr.slice(0, 7);
+    nextBtn.disabled = refYM >= curYM;
+  } else {
+    nav.classList.remove('visible');
+    periodLbl.textContent = '';
+  }
 
   if (!items.length) {
     container.innerHTML = '<span style="color:var(--text2);font-size:0.78rem">本期無超越事件</span>';
@@ -1019,32 +1079,34 @@ function renderStatsPills(items, dateStr, period) {
      </span>`
   ).join('');
 
-  const totalEvents   = items.reduce((s, i) => s + i.count, 0);
+  const totalEvents    = items.reduce((s, i) => s + i.count, 0);
   const totalCompanies = items.length;
-  summary.textContent = `共 ${totalEvents} 次超越事件，${totalCompanies} 間公司曾超越他人`;
+  summary.textContent  = `共 ${totalEvents} 次超越事件，${totalCompanies} 間公司曾超越他人`;
 }
 
 async function loadStatsPills(dateStr, period = statsPeriod) {
-  const stats = document.getElementById('crossoverStats');
+  const statsEl = document.getElementById('crossoverStats');
   try {
-    const qs    = `period=${period}${dateStr ? '&date=' + dateStr : ''}`;
-    const items = await fetch(`/api/crossover-stats?${qs}`).then(r => r.json());
-    if (!items.length) {
-      stats.classList.remove('visible'); return;
-    }
-    stats.classList.add('visible');
-    renderStatsPills(items, dateStr, period);
+    // Reset refDate when switching period or date
+    if (!statsRefDate) statsRefDate = dateStr || '';
+    const ref = statsRefDate || dateStr || '';
+    const qs  = `period=${period}${ref ? '&ref_date=' + ref : ''}`;
+    const result = await fetch(`/api/crossover-stats?${qs}`).then(r => r.json());
+    if (!result.items?.length) { statsEl.classList.remove('visible'); return; }
+    statsEl.classList.add('visible');
+    renderStatsPills(result);
   } catch(e) {
-    stats.classList.remove('visible');
+    statsEl.classList.remove('visible');
   }
 }
 
 async function loadCrossovers(dateStr) {
   currentDateStr = dateStr || '';
+  statsRefDate   = currentDateStr;   // reset nav to selected date
   const bar   = document.getElementById('crossoverBar');
   const stats = document.getElementById('crossoverStats');
 
-  // Load stats bar (today/week/month) in parallel
+  // Load stats bar in parallel
   loadStatsPills(dateStr, statsPeriod);
 
   try {

@@ -65,25 +65,31 @@ def api_crossovers():
 
 @app.route("/api/crossover-stats")
 def api_crossover_stats():
-    """Aggregate crossover winner counts for day / week / month."""
-    date_str = request.args.get("date")
-    period   = request.args.get("period", "day")   # day | week | month
+    """Aggregate crossover winner counts for day / week / month.
+    ref_date: anchor date for week/month navigation (default: latest date in DB).
+    """
+    period   = request.args.get("period", "day")
+    ref_date = request.args.get("ref_date")       # navigation anchor
 
-    all_dates = sorted(db.get_dates())              # ascending
+    all_dates = sorted(db.get_dates())
     if not all_dates:
         return jsonify([])
-    if not date_str:
-        date_str = all_dates[-1]
+
+    anchor = ref_date or all_dates[-1]
 
     if period == "week":
-        d = datetime.strptime(date_str, "%Y-%m-%d")
+        d          = datetime.strptime(anchor, "%Y-%m-%d")
         week_start = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
-        period_dates = [dt for dt in all_dates if week_start <= dt <= date_str]
+        week_end   = (d - timedelta(days=d.weekday()) + timedelta(days=6)).strftime("%Y-%m-%d")
+        period_dates = [dt for dt in all_dates if week_start <= dt <= week_end]
+        meta = {"start": week_start, "end": week_end}
     elif period == "month":
-        period_dates = [dt for dt in all_dates
-                        if dt[:7] == date_str[:7] and dt <= date_str]
+        ym           = anchor[:7]
+        period_dates = [dt for dt in all_dates if dt[:7] == ym]
+        meta = {"ym": ym}
     else:
-        period_dates = [date_str]
+        period_dates = [anchor]
+        meta = {}
 
     stats = {}
     for dt in period_dates:
@@ -96,7 +102,10 @@ def api_crossover_stats():
             if e["tier"] == "mega":
                 stats[key]["tier"] = "mega"
 
-    return jsonify(sorted(stats.values(), key=lambda x: x["count"], reverse=True))
+    return jsonify({
+        "meta":  meta,
+        "items": sorted(stats.values(), key=lambda x: x["count"], reverse=True),
+    })
 
 
 @app.route("/api/history")
