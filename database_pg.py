@@ -1,5 +1,54 @@
 """PostgreSQL adapter — used on Vercel + Supabase."""
-from database import _compute_crossovers   # shared helper
+
+
+def _tier(cap):
+    return "mega" if cap >= 200e9 else "large"
+
+
+def _compute_crossovers(rows, target_dates):
+    """Detect crossovers from raw DB rows across consecutive dates."""
+    by_date = {}
+    for r in rows:
+        d, t, name, cap = r[0], r[1], r[2], float(r[3])
+        if d not in by_date:
+            by_date[d] = {}
+        by_date[d][t] = {"company_name": name, "market_cap": cap, "tier": _tier(cap)}
+
+    all_dates  = sorted(by_date.keys())
+    target_set = set(target_dates)
+    events     = []
+
+    for i in range(1, len(all_dates)):
+        today_str, prev_str = all_dates[i], all_dates[i - 1]
+        if today_str not in target_set:
+            continue
+        today, prev = by_date[today_str], by_date[prev_str]
+        common = [t for t in today if t in prev]
+
+        for j in range(len(common)):
+            for k in range(j + 1, len(common)):
+                a, b = common[j], common[k]
+                if today[a]["tier"] != today[b]["tier"]:
+                    continue
+                at, bt = today[a]["market_cap"], today[b]["market_cap"]
+                ap, bp = prev[a]["market_cap"],  prev[b]["market_cap"]
+                winner = loser = None
+                if at > bt and ap <= bp: winner, loser = a, b
+                elif bt > at and bp <= ap: winner, loser = b, a
+                if winner:
+                    events.append({
+                        "date":            today_str,
+                        "tier":            today[winner]["tier"],
+                        "winner":          winner,
+                        "winner_name":     today[winner]["company_name"],
+                        "winner_cap":      today[winner]["market_cap"],
+                        "winner_prev_cap": prev[winner]["market_cap"],
+                        "loser":           loser,
+                        "loser_name":      today[loser]["company_name"],
+                        "loser_cap":       today[loser]["market_cap"],
+                        "loser_prev_cap":  prev[loser]["market_cap"],
+                    })
+    return events
 import os
 from contextlib import contextmanager
 from datetime import date

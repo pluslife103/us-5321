@@ -1512,7 +1512,12 @@ function renderCharts() {
 // ── Init ───────────────────────────────────────────────────────────────────
 (async () => {
   await loadDates();
-  await loadData(document.getElementById('dateSelect').value);
+  const dateVal = document.getElementById('dateSelect').value;
+  // Load stats bar independently so it shows even if main data has issues
+  currentDateStr = dateVal || '';
+  statsRefDate   = currentDateStr;
+  loadStatsPills();          // non-blocking, runs in parallel
+  await loadData(dateVal);
 })();
 </script>
 </body>
