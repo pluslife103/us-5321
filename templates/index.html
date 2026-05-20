@@ -282,42 +282,52 @@
   .stats-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .stats-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
   .stats-period-label { font-size: 0.78rem; color: var(--text); font-weight: 600; min-width: 100px; text-align: center; }
+  /* Tier group rows */
+  .stats-tier-group { border-top: 1px solid var(--border); }
+  .stats-tier-group:first-child { border-top: none; }
+  .stats-tier-header {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 0 5px; cursor: pointer; user-select: none;
+  }
+  .stats-tier-header:hover { opacity: 0.85; }
+  .stats-tier-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stats-tier-name { font-size: 0.78rem; font-weight: 700; }
+  .stats-tier-total {
+    font-size: 0.7rem; font-weight: 800; color: #fff;
+    padding: 1px 6px; border-radius: 9px; margin-left: 2px;
+  }
+  .stats-tier-companies { font-size: 0.72rem; color: var(--text2); }
+  .stats-tier-chevron {
+    font-size: 0.65rem; color: var(--text2);
+    margin-left: auto; transition: transform 0.2s;
+  }
+  .stats-tier-chevron.collapsed { transform: rotate(-90deg); }
+
   .stats-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: flex; flex-wrap: wrap; gap: 5px; padding-bottom: 6px;
   }
+  .stats-chips.hidden { display: none; }
   .stats-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 6px 4px 10px;
-    border-radius: 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    font-size: 0.8rem;
-    color: var(--text);
-    font-weight: 500;
-    cursor: default;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 6px 3px 9px; border-radius: 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 0.78rem; color: var(--text); font-weight: 500; cursor: default;
   }
-  .stats-chip-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-chip-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .stats-chip-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    padding: 1px 6px;
-    border-radius: 10px;
-    font-size: 0.72rem;
-    font-weight: 800;
-    color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; padding: 1px 5px;
+    border-radius: 9px; font-size: 0.7rem; font-weight: 800; color: #fff;
   }
   .stats-chip-count.tier-mega   { background: var(--mega);  }
   .stats-chip-count.tier-large  { background: var(--large); }
   .stats-chip-count.tier-mlarge { background: var(--mid);   }
   .stats-chip-count.tier-mid    { background: var(--small); }
   .stats-chip-count.tier-small  { background: var(--micro); }
-  .stats-summary { font-size: 0.78rem; color: var(--text2); padding-top: 2px; }
+  .stats-summary {
+    font-size: 0.75rem; color: var(--text2);
+    padding: 5px 0 2px; border-top: 1px solid var(--border); margin-top: 2px;
+  }
 
   /* ── Crossover Alerts ── */
   .crossover-bar {
@@ -648,7 +658,7 @@
     </div>
   </div>
   <div id="statsBody">
-    <div class="stats-chips" id="statsPills"></div>
+    <div id="statsGroups"></div>
     <div class="stats-summary" id="statsSummary"></div>
   </div>
 </div>
@@ -1064,10 +1074,28 @@ function shiftStatsPeriod(dir) {
   loadStatsPills();
 }
 
+const TIER_DEF = [
+  { key: 'mega',   label: 'Mega ≥$200B',   color: 'var(--mega)',  dot: '#f59e0b', open: true  },
+  { key: 'large',  label: '$100B–$200B',    color: 'var(--large)', dot: '#3b82f6', open: true  },
+  { key: 'mlarge', label: '$10B–$100B',     color: 'var(--mid)',   dot: '#8b5cf6', open: false },
+  { key: 'mid',    label: '$2B–$10B',       color: 'var(--small)', dot: '#10b981', open: false },
+  { key: 'small',  label: '$300M–$2B',      color: 'var(--micro)', dot: '#6b7280', open: false },
+];
+// persist open/closed state per tier
+const tierOpenState = Object.fromEntries(TIER_DEF.map(t => [t.key, t.open]));
+
+function toggleTierGroup(key) {
+  tierOpenState[key] = !tierOpenState[key];
+  const chips   = document.getElementById(`tier-chips-${key}`);
+  const chevron = document.getElementById(`tier-chevron-${key}`);
+  if (chips)   chips.classList.toggle('hidden', !tierOpenState[key]);
+  if (chevron) chevron.classList.toggle('collapsed', !tierOpenState[key]);
+}
+
 function renderStatsPills(result) {
   const { meta, items } = result;
-  const container = document.getElementById('statsPills');
-  const summary   = document.getElementById('statsSummary');
+  const groups  = document.getElementById('statsGroups');
+  const summary = document.getElementById('statsSummary');
   const periodLbl = document.getElementById('statsPeriodLabel');
   const nav       = document.getElementById('statsNav');
   const prevBtn   = document.getElementById('statsPrev');
@@ -1094,17 +1122,42 @@ function renderStatsPills(result) {
   }
 
   if (!items || !items.length) {
-    container.innerHTML = '<span style="color:var(--text2);font-size:0.78rem">本期無超越事件</span>';
+    groups.innerHTML = '<div style="color:var(--text2);font-size:0.78rem;padding:6px 0">本期無超越事件</div>';
     summary.textContent = '';
     return;
   }
 
-  container.innerHTML = items.map(item =>
-    `<span class="stats-chip">
-       <span class="stats-chip-name">${item.winner} ${item.winner_name}</span>
-       <span class="stats-chip-count tier-${item.tier}">${item.count}次</span>
-     </span>`
-  ).join('');
+  // Group items by tier
+  const byTier = {};
+  items.forEach(item => {
+    if (!byTier[item.tier]) byTier[item.tier] = [];
+    byTier[item.tier].push(item);
+  });
+
+  groups.innerHTML = TIER_DEF
+    .filter(td => byTier[td.key]?.length)
+    .map(td => {
+      const tierItems  = byTier[td.key];
+      const totalCount = tierItems.reduce((s, i) => s + i.count, 0);
+      const isOpen     = tierOpenState[td.key];
+      const chips      = tierItems.map(item =>
+        `<span class="stats-chip">
+           <span class="stats-chip-name">${item.winner} ${item.winner_name}</span>
+           <span class="stats-chip-count tier-${td.key}">${item.count}次</span>
+         </span>`
+      ).join('');
+      return `
+        <div class="stats-tier-group">
+          <div class="stats-tier-header" onclick="toggleTierGroup('${td.key}')">
+            <span class="stats-tier-dot" style="background:${td.dot}"></span>
+            <span class="stats-tier-name" style="color:${td.color}">${td.label}</span>
+            <span class="stats-tier-total" style="background:${td.dot}">${totalCount}</span>
+            <span class="stats-tier-companies">${tierItems.length} 間公司</span>
+            <span class="stats-tier-chevron${isOpen ? '' : ' collapsed'}" id="tier-chevron-${td.key}">▼</span>
+          </div>
+          <div class="stats-chips${isOpen ? '' : ' hidden'}" id="tier-chips-${td.key}">${chips}</div>
+        </div>`;
+    }).join('');
 
   const totalEvents    = items.reduce((s, i) => s + i.count, 0);
   const totalCompanies = items.length;
